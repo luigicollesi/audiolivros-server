@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { GenreService } from './genre.service';
 
-@Controller('book')
+@Controller('books')
 export class GenreController {
   constructor(private readonly service: GenreService) {}
 
