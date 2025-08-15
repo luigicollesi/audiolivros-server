@@ -5,6 +5,8 @@ import { join } from 'path';
 import { SupabaseModule } from './supabase/module';
 import { BooksModule } from './books/books.module';
 
+import { TtsModule } from './tts/tts.module';
+
 @Module({
   imports: [
     // serve tudo que estiver em public/covers/ na rota /covers
@@ -19,7 +21,8 @@ import { BooksModule } from './books/books.module';
       },
     }),
     SupabaseModule,
-    BooksModule, // <- tem que estar aqui
+    BooksModule,
+    TtsModule
   ],
 })
 export class AppModule {}
