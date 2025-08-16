@@ -1,3 +1,4 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -5,6 +6,7 @@ import { join } from 'path';
 import { SupabaseModule } from './supabase/module';
 import { BooksModule } from './books/books.module';
 import { SummariesModule } from './summaries/summaries.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { SummariesModule } from './summaries/summaries.module';
       },
     }),
 
-    // /audio (com Range por padrão)
+    // /audios (com Range por padrão)
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public', 'audios'),
       serveRoot: '/audios',
@@ -29,10 +31,7 @@ import { SummariesModule } from './summaries/summaries.module';
         etag: true,
         immutable: true,
         setHeaders: (res, filePath) => {
-          // opcional: afirmar o suporte a Range
           res.setHeader('Accept-Ranges', 'bytes');
-
-          // MIME (geralmente o express já acerta, mas garantimos)
           if (filePath.endsWith('.mp3')) res.setHeader('Content-Type', 'audio/mpeg');
           else if (filePath.endsWith('.ogg')) res.setHeader('Content-Type', 'audio/ogg');
           else if (filePath.endsWith('.aac')) res.setHeader('Content-Type', 'audio/aac');
@@ -44,5 +43,6 @@ import { SummariesModule } from './summaries/summaries.module';
     BooksModule,
     SummariesModule,
   ],
+  controllers: [HealthController], // <— adiciona o endpoint /healthz
 })
 export class AppModule {}
