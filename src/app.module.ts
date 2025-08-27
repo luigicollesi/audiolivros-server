@@ -7,6 +7,7 @@ import { SupabaseModule } from './supabase/module';
 import { BooksModule } from './books/books.module';
 import { SummariesModule } from './summaries/summaries.module';
 import { HealthController } from './health.controller';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { HealthController } from './health.controller';
     SupabaseModule,
     BooksModule,
     SummariesModule,
+    AuthModule
   ],
   controllers: [HealthController], // <— adiciona o endpoint /healthz
 })

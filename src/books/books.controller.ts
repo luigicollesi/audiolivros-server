@@ -1,5 +1,5 @@
 // src/books/books.controller.ts
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UsePipes, ValidationPipe } from '@nestjs/common';
 import { BooksService } from './books.service';
 import { GetBooksQueryDto } from './dto/get-books-query.dto';
 
@@ -9,10 +9,8 @@ export class BooksController {
 
   // GET /books?start=0&end=9&languageId=en-US
   @Get()
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   getRange(@Query() q: GetBooksQueryDto) {
-    if (q.end < q.start) {
-      throw new BadRequestException('Parâmetros inválidos: use start>=0 e end>=start.');
-    }
     return this.service.getRange(q.start, q.end, q.languageId);
   }
 }
