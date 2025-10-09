@@ -1,13 +1,12 @@
 // src/genre/dto/get-genre-query.dto.ts
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsNotEmpty, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, Min } from 'class-validator';
 
 export class GetGenreQueryDto {
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsString()
-  @IsNotEmpty({ message: 'genre é obrigatório.' })
-  @MaxLength(100)
-  genre!: string;
+  @Transform(({ value }) => (value === undefined || value === '' ? undefined : Number(value)))
+  @IsInt({ message: 'genreId deve ser inteiro.' })
+  @Min(1, { message: 'genreId deve ser >= 1.' })
+  genreId!: number;
 
   @Transform(({ value }) =>
     value === undefined || value === '' ? 'en-US' : String(value).trim(),

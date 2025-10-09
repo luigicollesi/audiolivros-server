@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ProfileDetailsService } from './profile-details.service';
+import { PhoneVerificationService } from './phone-verification.service';
 import { UsersModule } from '../users/users.module';
 
 @Module({
@@ -14,6 +16,6 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, ProfileDetailsService, PhoneVerificationService],
 })
 export class AuthModule {}

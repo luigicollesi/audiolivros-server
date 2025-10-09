@@ -28,8 +28,8 @@ export class GenreService {
   /**
    * Filtra livros por gênero (genres.genre ~ ilike), respeitando idioma do título e paginação.
    */
-  async getByGenre(start: number, end: number, languageId: string, genre: string) {
-    const pattern = `%${genre}%`; // “equivalente”: contém (case-insensitive)
+  async getByGenre(start: number, end: number, languageId: string, genreSlug: string) {
+    const pattern = `%${genreSlug}%`; // “equivalente”: contém (case-insensitive)
 
     const { data, count, error } = await this.supabase
       .from('books')

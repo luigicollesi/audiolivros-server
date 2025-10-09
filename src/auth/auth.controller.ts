@@ -11,7 +11,10 @@ import {
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { ProviderIdTokenDto } from './dto/provider-idtoken.dto';
+import { PhoneVerificationRequestDto } from './dto/phone-verification-request.dto';
+import { PhoneVerificationConfirmDto } from './dto/phone-verification-confirm.dto';
 import { UsersService } from '../users/users.service';
+import { extractBearerToken } from '../common/utils/bearer';
 
 interface SessionizedRequest extends Request {
   session?: { userId: string; tokenId: string; provider: string; providerSub?: string; expiresAt: string };
@@ -48,6 +51,55 @@ export class AuthController {
         e?.status && Number.isInteger(e.status)
           ? e.status
           : HttpStatus.BAD_REQUEST;
+      throw new HttpException({ message }, status);
+    }
+  }
+
+  @Post('token/refresh')
+  async refreshToken(@Req() req: SessionizedRequest) {
+    try {
+      const tokenClear = extractBearerToken(req.headers?.authorization);
+      if (!tokenClear) {
+        throw new HttpException({ message: 'Token ausente.' }, HttpStatus.UNAUTHORIZED);
+      }
+      const result = await this.auth.refreshSessionToken(tokenClear);
+      return result;
+    } catch (e: any) {
+      const status =
+        e?.status && Number.isInteger(e.status)
+          ? e.status
+          : HttpStatus.BAD_REQUEST;
+      const message = e?.message ?? 'Falha ao renovar sessão.';
+      throw new HttpException({ message }, status);
+    }
+  }
+
+  @Post('phone/request-code')
+  async requestPhoneCode(@Body() body: PhoneVerificationRequestDto) {
+    try {
+      const result = await this.auth.requestPhoneVerification(body);
+      return result;
+    } catch (e: any) {
+      const status =
+        e?.status && Number.isInteger(e.status)
+          ? e.status
+          : HttpStatus.BAD_REQUEST;
+      const message = e?.message ?? 'Falha ao iniciar verificação.';
+      throw new HttpException({ message }, status);
+    }
+  }
+
+  @Post('phone/verify-code')
+  async verifyPhoneCode(@Body() body: PhoneVerificationConfirmDto) {
+    try {
+      const result = await this.auth.verifyPhoneCode(body);
+      return result;
+    } catch (e: any) {
+      const status =
+        e?.status && Number.isInteger(e.status)
+          ? e.status
+          : HttpStatus.BAD_REQUEST;
+      const message = e?.message ?? 'Código inválido.';
       throw new HttpException({ message }, status);
     }
   }

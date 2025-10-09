@@ -57,6 +57,8 @@ export class AppModule implements NestModule {
       .exclude(
         // Liberadas:
         { path: 'auth/id-token', method: RequestMethod.POST },
+        { path: 'auth/phone/request-code', method: RequestMethod.POST },
+        { path: 'auth/phone/verify-code', method: RequestMethod.POST },
         { path: 'health', method: RequestMethod.GET },
         // (opcional) docs/versões públicas
         { path: 'docs', method: RequestMethod.GET },

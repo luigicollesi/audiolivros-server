@@ -4,12 +4,10 @@ import type { Request, Response, NextFunction } from 'express';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
 import { hashToken } from '../common/utils/token';
+import { extractBearerToken } from '../common/utils/bearer';
 
 type SessionPayload = { userId: string; tokenId: string; provider: string; providerSub?: string; expiresAt: string };
 interface SessionizedRequest extends Request { session?: SessionPayload; }
-
-// Regex: "Bearer <qualquer coisa>" com espaços extras permitido; case-insensitive
-const BEARER_RE = /^Bearer\s+(.+)$/i;
 
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
@@ -17,23 +15,13 @@ export class SessionMiddleware implements NestMiddleware {
 
   async use(req: SessionizedRequest, res: Response, next: NextFunction) {
     try {
-      const raw = req.headers['authorization'];
-      const header = Array.isArray(raw) ? raw[0] : raw || '';
-
-      const match = header.match(BEARER_RE);
-      if (!match) {
-        // console.debug('Auth: header ausente/malformado:', JSON.stringify(header));
-        return res.status(401).json({ message: 'Token ausente.' });
-      }
-
-      // Normaliza: remove espaços, tabs, quebras e aspas acidentais
-      const tokenClear = match[1].trim().replace(/^"|"$/g, '');
-      if (!tokenClear || tokenClear.toLowerCase() === 'undefined' || tokenClear.toLowerCase() === 'null') {
+      const tokenClear = extractBearerToken(req.headers['authorization']);
+      if (!tokenClear) {
+        // console.debug('Auth: header ausente/malformado:', JSON.stringify(req.headers['authorization']));
         return res.status(401).json({ message: 'Token ausente.' });
       }
 
       const tokenHash = hashToken(tokenClear);
-      console.log(`Bearer ${String(tokenClear).trim()}`);
 
       const { data, error } = await this.sb
         .from('tokens')
@@ -57,7 +45,7 @@ export class SessionMiddleware implements NestMiddleware {
         expiresAt: String(data.expires_at),
       };
 
-      console.log(`Auth: user ${data.user_id} (${provider}) autenticado com token ${data.id} (expira em ${data.expires_at})`);
+      console.log(`Auth: user ${data.user_id} (${provider}) autenticado. tokenId=${data.id}, expira em ${data.expires_at}`);
 
       next();
     } catch (e) {
