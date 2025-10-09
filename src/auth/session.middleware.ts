@@ -3,14 +3,10 @@ import { Inject, Injectable, NestMiddleware } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
-import * as crypto from 'crypto';
+import { hashToken } from '../common/utils/token';
 
-type SessionPayload = { userId: string; tokenId: string; expiresAt: string };
+type SessionPayload = { userId: string; tokenId: string; provider: string; providerSub?: string; expiresAt: string };
 interface SessionizedRequest extends Request { session?: SessionPayload; }
-
-function hashToken(clear: string): string {
-  return crypto.createHash('sha256').update(clear, 'utf8').digest('base64');
-}
 
 // Regex: "Bearer <qualquer coisa>" com espaços extras permitido; case-insensitive
 const BEARER_RE = /^Bearer\s+(.+)$/i;
@@ -38,11 +34,10 @@ export class SessionMiddleware implements NestMiddleware {
 
       const tokenHash = hashToken(tokenClear);
       console.log(`Bearer ${String(tokenClear).trim()}`);
-      const nowIso = new Date().toISOString();
 
       const { data, error } = await this.sb
         .from('tokens')
-        .select('id,user_id,expires_at')
+        .select('id,user_id,provider,provider_sub,expires_at')
         .eq('token_hash', tokenHash)
         .maybeSingle();
 
@@ -51,13 +46,18 @@ export class SessionMiddleware implements NestMiddleware {
         return res.status(401).json({ message: 'Token inválido ou expirado.' });
       }
 
+      const provider = data.provider ? String(data.provider) : 'unknown';
+      const providerSub = data.provider_sub ? String(data.provider_sub) : undefined;
+
       req.session = {
         userId: String(data.user_id),
         tokenId: String(data.id),
+        provider,
+        providerSub,
         expiresAt: String(data.expires_at),
       };
 
-      console.log(`Auth: user ${data.user_id} autenticado com token ${data.id} (expira em ${data.expires_at})`);
+      console.log(`Auth: user ${data.user_id} (${provider}) autenticado com token ${data.id} (expira em ${data.expires_at})`);
 
       next();
     } catch (e) {

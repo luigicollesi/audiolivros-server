@@ -6,6 +6,8 @@ declare module 'express-serve-static-core' {
     session?: {
       userId: string;
       tokenId: string;
+      provider: string;
+      providerSub?: string;
       expiresAt: string; // ISO
     };
   }

@@ -1,5 +1,5 @@
-// src/auth/dto/google-idtoken.dto.ts
-import { IsOptional, IsString, ValidateNested } from 'class-validator';
+// src/auth/dto/provider-idtoken.dto.ts
+import { IsOptional, IsString, ValidateNested, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class DeviceDto {
@@ -7,8 +7,13 @@ class DeviceDto {
   @IsOptional() @IsString() app_version?: string;
 }
 
-export class GoogleIdTokenDto {
+export class ProviderIdTokenDto {
   @IsString()
+  @IsNotEmpty()
+  provider!: string;
+
+  @IsString()
+  @IsNotEmpty()
   id_token!: string;
 
   @IsOptional()

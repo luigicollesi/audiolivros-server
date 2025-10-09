@@ -56,7 +56,7 @@ export class AppModule implements NestModule {
       .apply(SessionMiddleware)
       .exclude(
         // Liberadas:
-        { path: 'auth/google/id-token', method: RequestMethod.POST },
+        { path: 'auth/id-token', method: RequestMethod.POST },
         { path: 'health', method: RequestMethod.GET },
         // (opcional) docs/versões públicas
         { path: 'docs', method: RequestMethod.GET },

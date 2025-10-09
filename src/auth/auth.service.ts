@@ -4,7 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SB_ADMIN } from '../supabase/module';
 import { UsersService } from '../users/users.service';
 import { base64UrlDecode } from '../common/utils/base64url';
-import * as crypto from 'crypto';
+import { generateOpaqueToken, hashToken, addHoursIso } from '../common/utils/token';
 
 @Injectable()
 export class AuthService {
@@ -20,16 +20,18 @@ export class AuthService {
     const payloadJson = base64UrlDecode(parts[1]);
     return JSON.parse(payloadJson);
   }
-  private genTokenClear(bytes = 32): string {
-    return crypto.randomBytes(bytes).toString('base64url');
-  }
-  private hashToken(clear: string): string {
-    return crypto.createHash('sha256').update(clear, 'utf8').digest('base64');
-  }
-  private plusHoursISO(h = 1): string {
-    const d = new Date();
-    d.setHours(d.getHours() + h);
-    return d.toISOString();
+
+  async loginWithProvider(provider: string, idToken: string) {
+    const normalizedProvider = String(provider).trim().toLowerCase();
+    if (!normalizedProvider) {
+      throw new BadRequestException('Provider ausente.');
+    }
+    switch (normalizedProvider) {
+      case 'google':
+        return this.googleLogin(idToken);
+      default:
+        throw new BadRequestException(`Provider ${provider} não suportado.`);
+    }
   }
 
   async googleLogin(idToken: string) {
@@ -41,7 +43,11 @@ export class AuthService {
 
     const user = await Promise.resolve(this.users.upsertFromGoogleClaims(claims));
     const email = String(user.email).toLowerCase();
-    const provider = 'google';
+    const provider = user.provider ?? 'google';
+    const providerSub = user.providerSub ?? String(claims.sub ?? '');
+    if (!providerSub) {
+      throw new InternalServerErrorException('Identificador do provider ausente.');
+    }
     const name = user.name ?? null;
 
     // 2) Checar se já existe um perfil com outro provider
@@ -70,14 +76,15 @@ export class AuthService {
     if (upsertErr) throw new InternalServerErrorException(`Falha ao salvar profile: ${upsertErr.message}`);
 
     // 4) Gerar token opaco, salvar hash em `tokens`
-    const tokenClear = this.genTokenClear(32);
-    const tokenHash = this.hashToken(tokenClear);
+    const { clear: tokenClear, hash: tokenHash } = generateOpaqueToken(32);
     const issuedAt = new Date().toISOString();
-    const expiresAt = this.plusHoursISO(1);
+    const expiresAt = addHoursIso(1);
 
     const { error: tokErr } = await this.supabase.from('tokens').insert({
       user_id: profile.id,
       token_hash: tokenHash,
+      provider,
+      provider_sub: providerSub,
       issued_at: issuedAt,
       expires_at: expiresAt,
       revoked_at: null,
@@ -94,11 +101,11 @@ export class AuthService {
 
   async verifySessionToken(tokenClear: string) {
     if (!tokenClear) throw new UnauthorizedException('Token ausente.');
-    const tokenHash = this.hashToken(tokenClear);
+    const tokenHash = hashToken(tokenClear);
 
     const { data: row, error } = await this.supabase
       .from('tokens')
-      .select('email, provider, expires_at, revoked_at')
+      .select('email, provider, provider_sub, expires_at, revoked_at')
       .eq('token_hash', tokenHash)
       .maybeSingle();
 
@@ -109,6 +116,6 @@ export class AuthService {
       throw new UnauthorizedException('Token expirado.');
     }
 
-    return { email: row.email, provider: row.provider };
+    return { email: row.email, provider: row.provider, providerSub: row.provider_sub };
   }
 }

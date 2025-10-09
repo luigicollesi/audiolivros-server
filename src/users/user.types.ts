@@ -1,7 +1,7 @@
 // src/users/users.types.ts
 export type User = {
   id: string;
-  provider: 'google';
+  provider: string;
   providerSub: string;
   email: string;
   emailVerified?: boolean;

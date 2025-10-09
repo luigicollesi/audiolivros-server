@@ -8,12 +8,13 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
-import { GoogleIdTokenDto } from './dto/google-idtoken.dto';
+import { ProviderIdTokenDto } from './dto/provider-idtoken.dto';
 import { UsersService } from '../users/users.service';
 
 interface SessionizedRequest extends Request {
-  session?: { userId: string; tokenId: string; expiresAt: string };
+  session?: { userId: string; tokenId: string; provider: string; providerSub?: string; expiresAt: string };
 }
 
 @Controller('auth')
@@ -23,12 +24,12 @@ export class AuthController {
     private readonly users: UsersService,
   ) {}
 
-  // POST /auth/google/id-token
-  // Recebe { id_token } do front, valida/normaliza no serviço,
+  // POST /auth/id-token
+  // Recebe { provider, id_token } do front, valida/normaliza no serviço,
   // bloqueia email com provider diferente, gera token opaco,
   // grava hash em `tokens` e retorna { token, expiresAt, user }
-  @Post('google/id-token')
-  async googleIdToken(@Body() body: GoogleIdTokenDto) {
+  @Post('id-token')
+  async exchangeIdToken(@Body() body: ProviderIdTokenDto) {
     try {
       if (!body?.id_token) {
         throw new HttpException(
@@ -36,11 +37,13 @@ export class AuthController {
           HttpStatus.BAD_REQUEST,
         );
       }
-      const result = await this.auth.googleLogin(body.id_token);
+      const result = await this.auth.loginWithProvider(body.provider, body.id_token);
       return result;
     } catch (e: any) {
       // mantém a mensagem que você pediu quando for provider diferente
-      const message = e?.message ?? 'Falha ao efetuar login com Google';
+      const providerLabel = body?.provider ? String(body.provider).trim() : 'desconhecido';
+      const fallbackMessage = `Falha ao efetuar login com provider ${providerLabel}`;
+      const message = e?.message ?? fallbackMessage;
       const status =
         e?.status && Number.isInteger(e.status)
           ? e.status
