@@ -1,3 +1,4 @@
+// src/auth/auth.service.ts
 import { Inject, Injectable, UnauthorizedException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SB_ADMIN } from '../supabase/module';

@@ -1,7 +1,9 @@
 // src/app.module.ts
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+
+import { SessionMiddleware } from './auth/session.middleware';
 
 import { SupabaseModule } from './supabase/module';
 import { BooksModule } from './books/books.module';
@@ -47,4 +49,22 @@ import { AuthModule } from './auth/auth.module';
   ],
   controllers: [HealthController], // <— adiciona o endpoint /healthz
 })
-export class AppModule {}
+
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(SessionMiddleware)
+      .exclude(
+        // Liberadas:
+        { path: 'auth/google/id-token', method: RequestMethod.POST },
+        { path: 'health', method: RequestMethod.GET },
+        // (opcional) docs/versões públicas
+        { path: 'docs', method: RequestMethod.GET },
+        { path: 'version', method: RequestMethod.GET },
+        // assets públicos
+        { path: 'covers', method: RequestMethod.ALL },
+        { path: 'covers/*path', method: RequestMethod.ALL },
+      )
+      .forRoutes('*'); // Protege todo o resto
+  }
+}

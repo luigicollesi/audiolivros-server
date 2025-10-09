@@ -1,15 +1,20 @@
+// src/auth/auth.controller.ts
 import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpException,
   HttpStatus,
   Post,
+  Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { GoogleIdTokenDto } from './dto/google-idtoken.dto';
 import { UsersService } from '../users/users.service';
+
+interface SessionizedRequest extends Request {
+  session?: { userId: string; tokenId: string; expiresAt: string };
+}
 
 @Controller('auth')
 export class AuthController {
@@ -48,39 +53,27 @@ export class AuthController {
   // Lê o Bearer token (opaco), valida contra tabela `tokens`,
   // e retorna o perfil do usuário.
   @Get('me')
-  async me(@Headers('authorization') authz?: string) {
+  async me(@Req() req: SessionizedRequest) {
     try {
-      const header = authz ?? '';
-      const hasBearer = header.toLowerCase().startsWith('bearer ');
-      if (!hasBearer) {
-        throw new HttpException(
-          { message: 'Token ausente.' },
-          HttpStatus.UNAUTHORIZED,
-        );
+      if (!req.session?.userId) {
+        throw new HttpException({ message: 'Não autorizado.' }, HttpStatus.UNAUTHORIZED);
       }
-      const token = header.slice('Bearer '.length);
 
-      // valida token opaco -> { email, provider }
-      const { email, provider } = await this.auth.verifySessionToken(token);
+      const user = await this.users.getById(req.session.userId);
+      // fallback simples, caso você ainda não tenha getById:
+      // const user = await this.users.getByTokenId(req.session.tokenId);
 
-      // Busca perfil por email (idealmente via Supabase, implementado no UsersService)
-      const user = await this.users.getByEmail(email);
       if (!user) {
-        // fallback: ainda assim devolve email/provider válidos
-        return { email, provider, name: null };
+        return { userId: req.session.userId, name: null, email: null };
       }
 
       return {
-        email: user.email,
+        userId: user.id,
+        email: user.email ?? null,
         name: user.name ?? null,
       };
-    } catch (e: any) {
-      const message = e?.message ?? 'Token inválido';
-      const status =
-        e?.status && Number.isInteger(e.status)
-          ? e.status
-          : HttpStatus.UNAUTHORIZED;
-      throw new HttpException({ message }, status);
+    } catch {
+      throw new HttpException({ message: 'Não autorizado.' }, HttpStatus.UNAUTHORIZED);
     }
   }
 }

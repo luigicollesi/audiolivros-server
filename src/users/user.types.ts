@@ -1,3 +1,4 @@
+// src/users/users.types.ts
 export type User = {
   id: string;
   provider: 'google';
