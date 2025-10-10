@@ -25,5 +25,6 @@ import { UsersModule } from '../users/users.module';
     EmailVerificationService,
     PasswordsService,
   ],
+  exports: [ProfileDetailsService, EmailVerificationService],
 })
 export class AuthModule {}

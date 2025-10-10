@@ -1,5 +1,5 @@
 // src/auth/session.middleware.ts
-import { Inject, Injectable, NestMiddleware } from '@nestjs/common';
+import { Inject, Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
@@ -19,13 +19,15 @@ interface SessionizedRequest extends Request {
 
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
+  private readonly logger = new Logger(SessionMiddleware.name);
+
   constructor(@Inject(SUPABASE_CLIENT) private readonly sb: SupabaseClient) {}
 
   async use(req: SessionizedRequest, res: Response, next: NextFunction) {
     try {
       const tokenClear = extractBearerToken(req.headers['authorization']);
       if (!tokenClear) {
-        // console.debug('Auth: header ausente/malformado:', JSON.stringify(req.headers['authorization']));
+        this.logger.warn('Cabeçalho de autorização ausente ou malformado.');
         return res.status(401).json({ message: 'Token ausente.' });
       }
 
@@ -38,7 +40,9 @@ export class SessionMiddleware implements NestMiddleware {
         .maybeSingle();
 
       if (error || !data) {
-        // console.debug('Auth: token não encontrado/expirado. hash=', tokenHash.slice(0,8));
+        this.logger.warn(
+          `Token inválido ou expirado (hash=${tokenHash.slice(0, 8)}...).`,
+        );
         return res.status(401).json({ message: 'Token inválido ou expirado.' });
       }
 
@@ -55,13 +59,13 @@ export class SessionMiddleware implements NestMiddleware {
         expiresAt: String(data.expires_at),
       };
 
-      console.log(
-        `Auth: user ${data.user_id} (${provider}) autenticado. tokenId=${data.id}, expira em ${data.expires_at}`,
+      this.logger.debug(
+        `Usuário ${data.user_id} autenticado com provider ${provider}. tokenId=${data.id}`,
       );
 
       next();
     } catch (e) {
-      // console.error('Auth error:', e);
+      this.logger.error(`Falha ao autenticar requisição: ${String(e)}`);
       return res.status(401).json({ message: 'Não autorizado.' });
     }
   }

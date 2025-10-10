@@ -1,21 +1,45 @@
 // src/summaries/summaries.controller.ts
 import {
+  ConflictException,
   Controller,
   Get,
-  Query,
+  Logger,
   NotFoundException,
-  ConflictException,
+  Query,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { SummariesService } from './summaries.service';
 import { GetSummaryDto } from './dto/get-summary.dto';
+import { FavoritesService } from '../favorites/favorites.service';
+
+interface SessionizedRequest extends Request {
+  session?: {
+    userId: string;
+  };
+}
 
 @Controller('summaries')
 export class SummariesController {
-  constructor(private readonly summaries: SummariesService) {}
+  constructor(
+    private readonly summaries: SummariesService,
+    private readonly favorites: FavoritesService,
+  ) {}
+
+  private readonly logger = new Logger(SummariesController.name);
 
   // GET /summaries?title=O%20Pr%C3%ADncipe&language=pt-BR
   @Get()
-  async getByTitleAndLanguage(@Query() q: GetSummaryDto) {
+  async getByTitleAndLanguage(
+    @Req() req: SessionizedRequest,
+    @Query() q: GetSummaryDto,
+  ) {
+    const profileId = req.session?.userId;
+    if (!profileId) {
+      throw new UnauthorizedException('Sessão inválida.');
+    }
+
     const items = await this.summaries.findByTitleAndLanguage(
       q.title,
       q.language,
@@ -32,6 +56,22 @@ export class SummariesController {
       );
     }
 
-    return items[0];
+    const summary = items[0];
+    const favorite = await this.favorites.isFavorite(
+      profileId,
+      summary.bookId,
+    );
+
+    const response = {
+      audio_url: summary.audio_url,
+      summary: summary.summary,
+      favorite,
+    };
+
+    this.logger.debug(
+      `Resumo recuperado para "${q.title}" (${q.language}) - favorito=${favorite}.`,
+    );
+
+    return response;
   }
 }

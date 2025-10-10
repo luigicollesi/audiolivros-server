@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import {
   generateOpaqueToken,
@@ -62,6 +63,8 @@ export interface EmailResetPayload {
 
 @Injectable()
 export class EmailVerificationService {
+  private readonly logger = new Logger(EmailVerificationService.name);
+
   private readonly pendingByToken = new Map<string, EmailRecord>();
   private readonly emailIndex = new Map<string, string>();
   private readonly registerIndex = new Map<string, string>();
@@ -440,7 +443,7 @@ export class EmailVerificationService {
   }
 
   private sendVerificationEmail(email: string, code: string) {
-    console.log(`[auth] Código ${code} enviado para o email ${email}`);
+    this.logger.log(`Código ${code} enviado para o email ${email}`);
   }
 
   private generateCode() {

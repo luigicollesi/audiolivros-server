@@ -8,7 +8,11 @@ import {
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
 
-export type SummaryItem = { audio_url: string; summary: string };
+export type SummaryItem = {
+  bookId: string;
+  audio_url: string;
+  summary: string;
+};
 type BookTitleRow = { book_id: string };
 
 @Injectable()
@@ -39,18 +43,22 @@ export class SummariesService {
     );
     const { data: summaries, error: sumErr } = await this.supabase
       .from('summaries')
-      .select('audio_url, summary')
+      .select('book_id, audio_url, summary')
       .in('book_id', bookIds)
       .eq('language', language);
     if (sumErr) throw new InternalServerErrorException(sumErr.message);
 
-    const items = (summaries ?? []) as SummaryItem[];
+    const items = (summaries ?? []).map((s: any) => ({
+      bookId: String(s.book_id),
+      audio_url: s.audio_url,
+      summary: s.summary,
+    })) as SummaryItem[];
     if (items.length === 0)
       throw new NotFoundException(
         `Nenhum summary para "${title}" em ${language}.`,
       );
     // opcional dedupe
-    const uniq = new Map(items.map((s) => [`${s.audio_url}|${s.summary}`, s]));
+    const uniq = new Map(items.map((s) => [s.bookId, s]));
     return Array.from(uniq.values());
   }
 }

@@ -1,4 +1,7 @@
 import * as crypto from 'crypto';
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('TokenUtils');
 
 /**
  * Gera um token opaco e seu hash correspondente.
@@ -104,12 +107,10 @@ export async function utcTimestampPlusMinutes(
       baseDate.setMinutes(baseDate.getMinutes() + minutes);
       return baseDate.toISOString();
     } catch (error) {
-      console.warn(`[token-utils] Falha na fonte ${source.url}:`, error);
+      logger.warn(`Falha na fonte ${source.url}: ${String(error)}`);
     }
   }
 
-  console.warn(
-    '[token-utils] Todas as fontes de horário falharam; usando relógio local.',
-  );
+  logger.warn('Todas as fontes de horário falharam; usando relógio local.');
   return addHoursIso(minutes / 60);
 }

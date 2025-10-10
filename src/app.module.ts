@@ -12,6 +12,8 @@ import { SessionMiddleware } from './auth/session.middleware';
 
 import { SupabaseModule } from './supabase/module';
 import { BooksModule } from './books/books.module';
+import { FavoritesModule } from './favorites/favorites.module';
+import { AccountModule } from './account/account.module';
 import { SummariesModule } from './summaries/summaries.module';
 import { HealthController } from './health.controller';
 import { AuthModule } from './auth/auth.module';
@@ -52,6 +54,8 @@ import { AuthModule } from './auth/auth.module';
 
     SupabaseModule,
     BooksModule,
+    FavoritesModule,
+    AccountModule,
     SummariesModule,
     AuthModule,
   ],

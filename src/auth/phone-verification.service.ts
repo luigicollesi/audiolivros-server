@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import {
   ProfileDetails,
@@ -53,6 +54,8 @@ export interface VerifiedPhoneResult {
 
 @Injectable()
 export class PhoneVerificationService {
+  private readonly logger = new Logger(PhoneVerificationService.name);
+
   private readonly pendingByToken = new Map<string, PendingRecord>();
   private readonly profileIndex = new Map<string, string>();
   private readonly codeCache = new Map<string, CodeCacheEntry>();
@@ -289,8 +292,8 @@ export class PhoneVerificationService {
     code: string,
     machineCode: string,
   ) {
-    console.log(
-      `[auth] Código ${code} destinado a ${phone} (machine=${machineCode})`,
+    this.logger.log(
+      `Código ${code} destinado a ${phone} (machine=${machineCode})`,
     );
   }
 

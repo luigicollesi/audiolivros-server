@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
   InternalServerErrorException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SB_ADMIN } from '../supabase/module';
@@ -33,6 +34,8 @@ const PROVIDER_NAME_FIELDS: Record<ExternalProvider, string[]> = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(SB_ADMIN) private readonly supabase: SupabaseClient,
     private readonly users: UsersService,
@@ -588,10 +591,14 @@ export class AuthService {
           .delete()
           .eq('id', tokenId);
         if (error) {
-          console.error(`Falha ao apagar token ${tokenId}:`, error.message);
+          this.logger.error(
+            `Falha ao apagar token ${tokenId}: ${error.message ?? error}`,
+          );
         }
       } catch (err) {
-        console.error(`Erro inesperado ao apagar token ${tokenId}:`, err);
+        this.logger.error(
+          `Erro inesperado ao apagar token ${tokenId}: ${String(err)}`,
+        );
       }
     }, delayMs);
 
