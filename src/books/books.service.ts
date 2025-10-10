@@ -1,5 +1,9 @@
 // src/books/books.service.ts
-import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
 
@@ -23,7 +27,9 @@ type BookItem = {
 
 @Injectable()
 export class BooksService {
-  constructor(@Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+  ) {}
 
   async getRange(start: number, end: number, languageId: string) {
     const { data, count, error } = await this.supabase
@@ -47,8 +53,9 @@ export class BooksService {
     const rows = (data ?? []) as unknown as BookRow[];
 
     const items: BookItem[] = rows.map((book) => {
-      const author =
-        Array.isArray(book.authors) ? book.authors[0].author : book.authors.author;
+      const author = Array.isArray(book.authors)
+        ? book.authors[0].author
+        : book.authors.author;
 
       return {
         title: book.book_titles[0].title,

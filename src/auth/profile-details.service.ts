@@ -1,4 +1,9 @@
-import { Inject, Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  BadRequestException,
+} from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SB_ADMIN } from '../supabase/module';
 
@@ -20,7 +25,9 @@ export class ProfileDetailsService {
   constructor(@Inject(SB_ADMIN) private readonly supabase: SupabaseClient) {}
 
   normalizePhone(phone: string) {
-    return String(phone ?? '').replace(/\s+/g, '').trim();
+    return String(phone ?? '')
+      .replace(/\s+/g, '')
+      .trim();
   }
 
   normalizeLanguage(language?: string | null) {
@@ -36,7 +43,10 @@ export class ProfileDetailsService {
       .eq('phone', phone)
       .maybeSingle();
 
-    if (error) throw new InternalServerErrorException(`Falha ao validar telefone: ${error.message}`);
+    if (error)
+      throw new InternalServerErrorException(
+        `Falha ao validar telefone: ${error.message}`,
+      );
 
     if (data && String(data.profileId) !== profileId) {
       throw new BadRequestException('Telefone já vinculado a outra conta.');
@@ -50,13 +60,19 @@ export class ProfileDetailsService {
       .eq('profileId', profileId)
       .maybeSingle();
 
-    if (error) throw new InternalServerErrorException(`Falha ao consultar detalhes do perfil: ${error.message}`);
+    if (error)
+      throw new InternalServerErrorException(
+        `Falha ao consultar detalhes do perfil: ${error.message}`,
+      );
     if (!data) return null;
 
     return this.normalizeDetails(data);
   }
 
-  async saveDetails(profileId: string, input: { phone: string; language?: string | null }): Promise<ProfileDetails> {
+  async saveDetails(
+    profileId: string,
+    input: { phone: string; language?: string | null },
+  ): Promise<ProfileDetails> {
     if (!profileId) throw new BadRequestException('Perfil inválido.');
 
     const phone = this.normalizePhone(input.phone);
@@ -66,21 +82,29 @@ export class ProfileDetailsService {
 
     const { data, error } = await this.supabase
       .from('profile_details')
-      .upsert({
-        profileId,
-        phone,
-        language,
-        genre: null,
-      }, { onConflict: 'profileId' })
+      .upsert(
+        {
+          profileId,
+          phone,
+          language,
+          genre: null,
+        },
+        { onConflict: 'profileId' },
+      )
       .select('phone, language, genre')
       .single();
 
-    if (error) throw new InternalServerErrorException(`Falha ao criar detalhes do perfil: ${error.message}`);
+    if (error)
+      throw new InternalServerErrorException(
+        `Falha ao criar detalhes do perfil: ${error.message}`,
+      );
 
     return this.requireNormalizeDetails(data);
   }
 
-  private normalizeDetails(data: ProfileDetailsRow | null): ProfileDetails | null {
+  private normalizeDetails(
+    data: ProfileDetailsRow | null,
+  ): ProfileDetails | null {
     if (!data) return null;
     return {
       phone: data.phone ?? null,
@@ -89,9 +113,14 @@ export class ProfileDetailsService {
     };
   }
 
-  private requireNormalizeDetails(data: ProfileDetailsRow | null): ProfileDetails {
+  private requireNormalizeDetails(
+    data: ProfileDetailsRow | null,
+  ): ProfileDetails {
     const normalized = this.normalizeDetails(data);
-    if (!normalized) throw new InternalServerErrorException('Falha ao normalizar detalhes do perfil.');
+    if (!normalized)
+      throw new InternalServerErrorException(
+        'Falha ao normalizar detalhes do perfil.',
+      );
     return normalized;
   }
 }

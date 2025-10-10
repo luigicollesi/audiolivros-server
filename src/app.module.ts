@@ -1,5 +1,10 @@
 // src/app.module.ts
-import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  Module,
+  MiddlewareConsumer,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -35,9 +40,12 @@ import { AuthModule } from './auth/auth.module';
         immutable: true,
         setHeaders: (res, filePath) => {
           res.setHeader('Accept-Ranges', 'bytes');
-          if (filePath.endsWith('.mp3')) res.setHeader('Content-Type', 'audio/mpeg');
-          else if (filePath.endsWith('.ogg')) res.setHeader('Content-Type', 'audio/ogg');
-          else if (filePath.endsWith('.aac')) res.setHeader('Content-Type', 'audio/aac');
+          if (filePath.endsWith('.mp3'))
+            res.setHeader('Content-Type', 'audio/mpeg');
+          else if (filePath.endsWith('.ogg'))
+            res.setHeader('Content-Type', 'audio/ogg');
+          else if (filePath.endsWith('.aac'))
+            res.setHeader('Content-Type', 'audio/aac');
         },
       },
     }),
@@ -45,27 +53,28 @@ import { AuthModule } from './auth/auth.module';
     SupabaseModule,
     BooksModule,
     SummariesModule,
-    AuthModule
+    AuthModule,
   ],
   controllers: [HealthController], // <— adiciona o endpoint /healthz
 })
-
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(SessionMiddleware)
       .exclude(
-        // Liberadas:
+        // Fluxos públicos de autenticação
         { path: 'auth/id-token', method: RequestMethod.POST },
-        { path: 'auth/phone/request-code', method: RequestMethod.POST },
-        { path: 'auth/phone/verify-code', method: RequestMethod.POST },
+        { path: 'auth/email/(.*)', method: RequestMethod.ALL },
+        { path: 'auth/phone/(.*)', method: RequestMethod.ALL },
+        // health/docs públicos
         { path: 'health', method: RequestMethod.GET },
-        // (opcional) docs/versões públicas
         { path: 'docs', method: RequestMethod.GET },
         { path: 'version', method: RequestMethod.GET },
         // assets públicos
         { path: 'covers', method: RequestMethod.ALL },
-        { path: 'covers/*path', method: RequestMethod.ALL },
+        { path: 'covers/(.*)', method: RequestMethod.ALL },
+        { path: 'audios', method: RequestMethod.ALL },
+        { path: 'audios/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*'); // Protege todo o resto
   }

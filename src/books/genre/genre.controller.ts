@@ -12,7 +12,9 @@ export class GenreController {
   @Get('genre')
   getByGenre(@Query() q: GetGenreQueryDto) {
     if (q.end < q.start) {
-      throw new BadRequestException('Parâmetros inválidos: use start>=0 e end>=start.');
+      throw new BadRequestException(
+        'Parâmetros inválidos: use start>=0 e end>=start.',
+      );
     }
     const slug = resolveGenreSlug(q.genreId);
     if (!slug) {

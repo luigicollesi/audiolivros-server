@@ -6,8 +6,16 @@ import { SUPABASE_CLIENT } from '../supabase/module';
 import { hashToken } from '../common/utils/token';
 import { extractBearerToken } from '../common/utils/bearer';
 
-type SessionPayload = { userId: string; tokenId: string; provider: string; providerSub?: string; expiresAt: string };
-interface SessionizedRequest extends Request { session?: SessionPayload; }
+type SessionPayload = {
+  userId: string;
+  tokenId: string;
+  provider: string;
+  providerSub?: string;
+  expiresAt: string;
+};
+interface SessionizedRequest extends Request {
+  session?: SessionPayload;
+}
 
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
@@ -35,7 +43,9 @@ export class SessionMiddleware implements NestMiddleware {
       }
 
       const provider = data.provider ? String(data.provider) : 'unknown';
-      const providerSub = data.provider_sub ? String(data.provider_sub) : undefined;
+      const providerSub = data.provider_sub
+        ? String(data.provider_sub)
+        : undefined;
 
       req.session = {
         userId: String(data.user_id),
@@ -45,7 +55,9 @@ export class SessionMiddleware implements NestMiddleware {
         expiresAt: String(data.expires_at),
       };
 
-      console.log(`Auth: user ${data.user_id} (${provider}) autenticado. tokenId=${data.id}, expira em ${data.expires_at}`);
+      console.log(
+        `Auth: user ${data.user_id} (${provider}) autenticado. tokenId=${data.id}, expira em ${data.expires_at}`,
+      );
 
       next();
     } catch (e) {

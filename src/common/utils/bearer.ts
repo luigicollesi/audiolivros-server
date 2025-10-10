@@ -1,7 +1,9 @@
 const BEARER_RE = /^Bearer\s+(.+)$/i;
 
-export function extractBearerToken(raw: string | string[] | undefined): string | null {
-  const header = Array.isArray(raw) ? raw[0] : raw ?? '';
+export function extractBearerToken(
+  raw: string | string[] | undefined,
+): string | null {
+  const header = Array.isArray(raw) ? raw[0] : (raw ?? '');
   const match = header.match(BEARER_RE);
   if (!match) return null;
 

@@ -1,6 +1,17 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { ProfileDetails, ProfileDetailsService } from './profile-details.service';
-import { generateOpaqueToken, hashToken, utcTimestampPlusMinutes } from '../common/utils/token';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  ProfileDetails,
+  ProfileDetailsService,
+} from './profile-details.service';
+import {
+  generateOpaqueToken,
+  hashToken,
+  utcTimestampPlusMinutes,
+} from '../common/utils/token';
 
 const PHONE_PENDING_TTL_MINUTES = 10;
 const PHONE_CODE_TTL_MINUTES = 5;
@@ -46,13 +57,17 @@ export class PhoneVerificationService {
   private readonly profileIndex = new Map<string, string>();
   private readonly codeCache = new Map<string, CodeCacheEntry>();
 
-  constructor(
-    private readonly profileDetails: ProfileDetailsService,
-  ) {}
+  constructor(private readonly profileDetails: ProfileDetailsService) {}
 
-  async createPending(profileId: string, provider: string, providerSub: string): Promise<PendingVerification> {
+  async createPending(
+    profileId: string,
+    provider: string,
+    providerSub: string,
+  ): Promise<PendingVerification> {
     const { clear: token, hash: tokenHash } = generateOpaqueToken(32);
-    const tokenExpiresAt = await utcTimestampPlusMinutes(PHONE_PENDING_TTL_MINUTES);
+    const tokenExpiresAt = await utcTimestampPlusMinutes(
+      PHONE_PENDING_TTL_MINUTES,
+    );
 
     const existingToken = this.profileIndex.get(profileId);
     if (existingToken) {
@@ -74,7 +89,10 @@ export class PhoneVerificationService {
 
     const msUntilExpiry = new Date(tokenExpiresAt).getTime() - Date.now();
     if (msUntilExpiry > 0) {
-      record.tokenTimer = setTimeout(() => this.clearRecord(tokenHash), msUntilExpiry);
+      record.tokenTimer = setTimeout(
+        () => this.clearRecord(tokenHash),
+        msUntilExpiry,
+      );
       if (typeof (record.tokenTimer as any)?.unref === 'function') {
         (record.tokenTimer as any).unref();
       }
@@ -86,9 +104,15 @@ export class PhoneVerificationService {
     return { token, expiresAt: tokenExpiresAt };
   }
 
-  async requestCode(input: { pendingToken: string; phone: string; language?: string; machineCode: string }) {
+  async requestCode(input: {
+    pendingToken: string;
+    phone: string;
+    language?: string;
+    machineCode: string;
+  }) {
     const pendingToken = String(input?.pendingToken ?? '').trim();
-    if (!pendingToken) throw new BadRequestException('Token de verificação ausente.');
+    if (!pendingToken)
+      throw new BadRequestException('Token de verificação ausente.');
 
     const phone = this.profileDetails.normalizePhone(input.phone);
     if (!phone) throw new BadRequestException('Telefone obrigatório.');
@@ -98,7 +122,8 @@ export class PhoneVerificationService {
 
     const language = this.profileDetails.normalizeLanguage(input.language);
     const machineCode = this.normalizeMachineCode(input.machineCode);
-    if (!machineCode) throw new BadRequestException('Código da máquina obrigatório.');
+    if (!machineCode)
+      throw new BadRequestException('Código da máquina obrigatório.');
 
     const verificationCode = this.generateVerificationCode();
     const codeHash = hashToken(verificationCode);
@@ -116,27 +141,41 @@ export class PhoneVerificationService {
     }
     const msUntilCodeExpiry = new Date(codeExpiresAt).getTime() - Date.now();
     if (msUntilCodeExpiry > 0) {
-      record.codeTimer = setTimeout(() => this.clearRecord(record.tokenHash), msUntilCodeExpiry);
+      record.codeTimer = setTimeout(
+        () => this.clearRecord(record.tokenHash),
+        msUntilCodeExpiry,
+      );
       if (typeof (record.codeTimer as any)?.unref === 'function') {
         (record.codeTimer as any).unref();
       }
     }
 
-    this.storeCodeForMachine(machineCode, record.tokenHash, verificationCode, codeExpiresAt);
+    this.storeCodeForMachine(
+      machineCode,
+      record.tokenHash,
+      verificationCode,
+      codeExpiresAt,
+    );
 
     this.dispatchWhatsappCode(phone, verificationCode, machineCode);
 
     return { ok: true, codeExpiresAt };
   }
 
-  async verifyCode(input: { pendingToken: string; code: string; machineCode: string }): Promise<VerifiedPhoneResult> {
+  async verifyCode(input: {
+    pendingToken: string;
+    code: string;
+    machineCode: string;
+  }): Promise<VerifiedPhoneResult> {
     const pendingToken = String(input?.pendingToken ?? '').trim();
     const code = String(input?.code ?? '').trim();
     const machineCode = this.normalizeMachineCode(input.machineCode);
 
-    if (!pendingToken) throw new BadRequestException('Token de verificação ausente.');
+    if (!pendingToken)
+      throw new BadRequestException('Token de verificação ausente.');
     if (!code) throw new BadRequestException('Código obrigatório.');
-    if (!machineCode) throw new BadRequestException('Código da máquina obrigatório.');
+    if (!machineCode)
+      throw new BadRequestException('Código da máquina obrigatório.');
 
     const record = await this.getRecordByPendingToken(pendingToken);
 
@@ -195,7 +234,9 @@ export class PhoneVerificationService {
     }
     if (this.isExpired(record.tokenExpiresAt)) {
       this.clearRecord(tokenHash);
-      throw new UnauthorizedException('Token de verificação expirado. Refaça o login.');
+      throw new UnauthorizedException(
+        'Token de verificação expirado. Refaça o login.',
+      );
     }
     return record;
   }
@@ -204,7 +245,9 @@ export class PhoneVerificationService {
     record.attempts += 1;
     if (record.attempts >= MAX_VERIFICATION_ATTEMPTS) {
       this.clearRecord(record.tokenHash);
-      throw new BadRequestException('Número máximo de tentativas excedido. Refaça o login.');
+      throw new BadRequestException(
+        'Número máximo de tentativas excedido. Refaça o login.',
+      );
     }
   }
 
@@ -241,11 +284,22 @@ export class PhoneVerificationService {
     return String(Math.floor(10000 + Math.random() * 90000));
   }
 
-  private dispatchWhatsappCode(phone: string, code: string, machineCode: string) {
-    console.log(`[auth] Código ${code} destinado a ${phone} (machine=${machineCode})`);
+  private dispatchWhatsappCode(
+    phone: string,
+    code: string,
+    machineCode: string,
+  ) {
+    console.log(
+      `[auth] Código ${code} destinado a ${phone} (machine=${machineCode})`,
+    );
   }
 
-  private storeCodeForMachine(machineCode: string, tokenHash: string, code: string, expiresAt: string) {
+  private storeCodeForMachine(
+    machineCode: string,
+    tokenHash: string,
+    code: string,
+    expiresAt: string,
+  ) {
     const existing = this.codeCache.get(machineCode);
     if (existing?.timeout) {
       clearTimeout(existing.timeout);

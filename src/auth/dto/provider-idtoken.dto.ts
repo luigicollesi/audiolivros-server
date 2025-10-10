@@ -1,5 +1,10 @@
 // src/auth/dto/provider-idtoken.dto.ts
-import { IsOptional, IsString, ValidateNested, IsNotEmpty } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  ValidateNested,
+  IsNotEmpty,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class DeviceDto {

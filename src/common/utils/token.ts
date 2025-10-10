@@ -4,7 +4,10 @@ import * as crypto from 'crypto';
  * Gera um token opaco e seu hash correspondente.
  * Retorna tanto o valor em claro (para enviar ao cliente) quanto o hash (para persistir).
  */
-export function generateOpaqueToken(bytes = 32): { clear: string; hash: string } {
+export function generateOpaqueToken(bytes = 32): {
+  clear: string;
+  hash: string;
+} {
   const clear = crypto.randomBytes(bytes).toString('base64url');
   const hash = hashToken(clear);
   return { clear, hash };
@@ -92,7 +95,9 @@ async function fetchUtcNowFromSource(source: TimeSourceConfig): Promise<Date> {
  * Obtém horário UTC de múltiplas fontes confiáveis. Se todas falharem,
  * utiliza o relógio local como fallback.
  */
-export async function utcTimestampPlusMinutes(minutes: number): Promise<string> {
+export async function utcTimestampPlusMinutes(
+  minutes: number,
+): Promise<string> {
   for (const source of TIME_SOURCES) {
     try {
       const baseDate = await fetchUtcNowFromSource(source);
@@ -103,6 +108,8 @@ export async function utcTimestampPlusMinutes(minutes: number): Promise<string> 
     }
   }
 
-  console.warn('[token-utils] Todas as fontes de horário falharam; usando relógio local.');
+  console.warn(
+    '[token-utils] Todas as fontes de horário falharam; usando relógio local.',
+  );
   return addHoursIso(minutes / 60);
 }
