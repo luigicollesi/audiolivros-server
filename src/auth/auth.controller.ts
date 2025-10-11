@@ -22,6 +22,7 @@ import { EmailResetVerifyDto } from './dto/email-reset-code.dto';
 import { EmailResetPasswordDto } from './dto/email-reset-password.dto';
 import { UsersService } from '../users/users.service';
 import { extractBearerToken } from '../common/utils/bearer';
+import { DuplicateRequestStatsService } from './duplicate-request-stats.service';
 
 interface SessionizedRequest extends Request {
   session?: {
@@ -38,6 +39,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly users: UsersService,
+    private readonly duplicateStats: DuplicateRequestStatsService,
   ) {}
 
   // POST /auth/id-token
@@ -256,6 +258,33 @@ export class AuthController {
       throw new HttpException(
         { message: 'Não autorizado.' },
         HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
+
+  // GET /auth/duplicate-stats
+  // Endpoint para monitoramento das estatísticas de requisições duplicadas
+  @Get('duplicate-stats')
+  async getDuplicateStats(@Req() req: SessionizedRequest) {
+    // Verificar se o usuário tem permissão (pode ser expandido para verificar roles)
+    if (!req.session?.userId) {
+      throw new HttpException(
+        { message: 'Não autorizado.' },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    try {
+      const stats = this.duplicateStats.getStats();
+      return {
+        message: 'Estatísticas de requisições duplicadas',
+        data: stats,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (e: any) {
+      throw new HttpException(
+        { message: 'Erro ao recuperar estatísticas.' },
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

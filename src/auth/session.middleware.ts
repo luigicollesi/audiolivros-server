@@ -5,6 +5,8 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
 import { hashToken } from '../common/utils/token';
 import { extractBearerToken } from '../common/utils/bearer';
+import { DuplicateRequestDetectorService } from './duplicate-request-detector.service';
+import { DuplicateRequestStatsService } from './duplicate-request-stats.service';
 
 type SessionPayload = {
   userId: string;
@@ -13,6 +15,7 @@ type SessionPayload = {
   providerSub?: string;
   expiresAt: string;
 };
+
 interface SessionizedRequest extends Request {
   session?: SessionPayload;
 }
@@ -21,7 +24,11 @@ interface SessionizedRequest extends Request {
 export class SessionMiddleware implements NestMiddleware {
   private readonly logger = new Logger(SessionMiddleware.name);
 
-  constructor(@Inject(SUPABASE_CLIENT) private readonly sb: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE_CLIENT) private readonly sb: SupabaseClient,
+    private readonly duplicateDetector: DuplicateRequestDetectorService,
+    private readonly duplicateStats: DuplicateRequestStatsService,
+  ) {}
 
   async use(req: SessionizedRequest, res: Response, next: NextFunction) {
     try {
@@ -33,6 +40,55 @@ export class SessionMiddleware implements NestMiddleware {
 
       const tokenHash = hashToken(tokenClear);
 
+      // Check for duplicate request
+      const isDuplicate = this.duplicateDetector.checkDuplicateRequest(req, tokenClear);
+      if (isDuplicate) {
+        // Record the duplicate request for statistics
+        this.duplicateStats.recordDuplicateRequest({
+          method: req.method,
+          url: req.url,
+          userAgent: req.headers['user-agent'],
+          ip: req.ip || req.connection?.remoteAddress,
+        });
+
+        this.logger.warn(
+          `Requisição duplicada detectada: ${req.method} ${req.url} - token: ${tokenHash.slice(0, 8)}...`,
+        );
+        return res.status(429).json({ 
+          message: 'Requisição duplicada detectada. Aguarde a conclusão da requisição anterior.',
+          code: 'DUPLICATE_REQUEST'
+        });
+      }
+
+      // Register this request as pending and get cleanup function
+      const cleanup = this.duplicateDetector.registerRequest(req, tokenClear);
+
+      // Wrap the response to clean up when request completes
+      const originalSend = res.send.bind(res);
+      const originalJson = res.json.bind(res);
+      const originalEnd = res.end.bind(res);
+
+      res.send = function(body?: any) {
+        cleanup();
+        return originalSend(body);
+      };
+
+      res.json = function(body?: any) {
+        cleanup();
+        return originalJson(body);
+      };
+
+      res.end = function(chunk?: any, encoding?: any) {
+        cleanup();
+        return originalEnd(chunk, encoding);
+      };
+
+      // Handle errors and cleanup
+      const handleError = (message: string, statusCode = 401) => {
+        cleanup();
+        return res.status(statusCode).json({ message });
+      };
+
       const { data, error } = await this.sb
         .from('tokens')
         .select('id,user_id,provider,provider_sub,expires_at')
@@ -43,7 +99,7 @@ export class SessionMiddleware implements NestMiddleware {
         this.logger.warn(
           `Token inválido ou expirado (hash=${tokenHash.slice(0, 8)}...).`,
         );
-        return res.status(401).json({ message: 'Token inválido ou expirado.' });
+        return handleError('Token inválido ou expirado.');
       }
 
       const provider = data.provider ? String(data.provider) : 'unknown';
@@ -69,4 +125,6 @@ export class SessionMiddleware implements NestMiddleware {
       return res.status(401).json({ message: 'Não autorizado.' });
     }
   }
+
+
 }
