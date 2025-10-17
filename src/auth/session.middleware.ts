@@ -32,56 +32,68 @@ export class SessionMiddleware implements NestMiddleware {
 
   async use(req: SessionizedRequest, res: Response, next: NextFunction) {
     try {
-      const tokenClear = extractBearerToken(req.headers['authorization']);
+      const { token: tokenClear, source } = this.extractTokenFromRequest(req);
       if (!tokenClear) {
-        this.logger.warn('Cabeçalho de autorização ausente ou malformado.');
+        this.logger.warn('Token ausente (header/query/cookie).');
         return res.status(401).json({ message: 'Token ausente.' });
+      }
+
+      if (!req.headers['authorization']) {
+        req.headers['authorization'] = `Bearer ${tokenClear}`;
       }
 
       const tokenHash = hashToken(tokenClear);
 
-      // Check for duplicate request
-      const isDuplicate = this.duplicateDetector.checkDuplicateRequest(req, tokenClear);
-      if (isDuplicate) {
-        // Record the duplicate request for statistics
-        this.duplicateStats.recordDuplicateRequest({
-          method: req.method,
-          url: req.url,
-          userAgent: req.headers['user-agent'],
-          ip: req.ip || req.connection?.remoteAddress,
-        });
+      const shouldEnforceDuplicateGuard = !this.isSafeMethod(req.method);
+      let cleanup: () => void = () => {};
 
-        this.logger.warn(
-          `Requisição duplicada detectada: ${req.method} ${req.url} - token: ${tokenHash.slice(0, 8)}...`,
+      if (shouldEnforceDuplicateGuard) {
+        const isDuplicate = this.duplicateDetector.checkDuplicateRequest(
+          req,
+          tokenClear,
         );
-        return res.status(429).json({ 
-          message: 'Requisição duplicada detectada. Aguarde a conclusão da requisição anterior.',
-          code: 'DUPLICATE_REQUEST'
-        });
+        if (isDuplicate) {
+          this.duplicateStats.recordDuplicateRequest({
+            method: req.method,
+            url: req.url,
+            userAgent: req.headers['user-agent'],
+            ip: req.ip || req.connection?.remoteAddress,
+          });
+
+          this.logger.warn(
+            `Requisição duplicada detectada: ${req.method} ${req.url} - token: ${tokenHash.slice(
+              0,
+              8,
+            )}...`,
+          );
+          return res.status(429).json({
+            message:
+              'Requisição duplicada detectada. Aguarde a conclusão da requisição anterior.',
+            code: 'DUPLICATE_REQUEST',
+          });
+        }
+
+        cleanup = this.duplicateDetector.registerRequest(req, tokenClear);
+
+        const originalSend = res.send.bind(res);
+        const originalJson = res.json.bind(res);
+        const originalEnd = res.end.bind(res);
+
+        res.send = function (body?: any) {
+          cleanup();
+          return originalSend(body);
+        };
+
+        res.json = function (body?: any) {
+          cleanup();
+          return originalJson(body);
+        };
+
+        res.end = function (chunk?: any, encoding?: any) {
+          cleanup();
+          return originalEnd(chunk, encoding);
+        };
       }
-
-      // Register this request as pending and get cleanup function
-      const cleanup = this.duplicateDetector.registerRequest(req, tokenClear);
-
-      // Wrap the response to clean up when request completes
-      const originalSend = res.send.bind(res);
-      const originalJson = res.json.bind(res);
-      const originalEnd = res.end.bind(res);
-
-      res.send = function(body?: any) {
-        cleanup();
-        return originalSend(body);
-      };
-
-      res.json = function(body?: any) {
-        cleanup();
-        return originalJson(body);
-      };
-
-      res.end = function(chunk?: any, encoding?: any) {
-        cleanup();
-        return originalEnd(chunk, encoding);
-      };
 
       // Handle errors and cleanup
       const handleError = (message: string, statusCode = 401) => {
@@ -126,5 +138,83 @@ export class SessionMiddleware implements NestMiddleware {
     }
   }
 
+  private extractTokenFromRequest(
+    req: Request,
+  ): { token: string | null; source: 'header' | 'query' | 'cookie' | null } {
+    const headerToken = extractBearerToken(req.headers['authorization']);
+    if (headerToken) {
+      return { token: headerToken, source: 'header' };
+    }
 
+    const queryObj = req.query as Record<string, unknown>;
+    const queryToken =
+      this.normalizeToken(this.pickFirstString(queryObj?.token)) ??
+      this.normalizeToken(this.pickFirstString(queryObj?.access_token)) ??
+      this.normalizeToken(this.pickFirstString(queryObj?.auth_token));
+
+    if (queryToken) {
+      return { token: queryToken, source: 'query' };
+    }
+
+    const cookieHeader = req.headers['cookie'];
+    if (cookieHeader && typeof cookieHeader === 'string') {
+      const cookieToken = this.extractTokenFromCookie(cookieHeader);
+      if (cookieToken) {
+        return { token: cookieToken, source: 'cookie' };
+      }
+    }
+
+    return { token: null, source: null };
+  }
+
+  private pickFirstString(value: unknown): string | null {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+      const first = value.find((item) => typeof item === 'string');
+      return (first as string | undefined) ?? null;
+    }
+    if (typeof value === 'object') {
+      const maybeValue = (value as any).toString?.();
+      if (typeof maybeValue === 'string') {
+        return maybeValue;
+      }
+    }
+    return null;
+  }
+
+  private normalizeToken(raw: string | null | undefined): string | null {
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const withoutBearer = trimmed.replace(/^Bearer\s+/i, '').trim();
+    if (!withoutBearer) return null;
+    const lowered = withoutBearer.toLowerCase();
+    if (lowered === 'undefined' || lowered === 'null') return null;
+    return withoutBearer;
+  }
+
+  private extractTokenFromCookie(cookieHeader: string): string | null {
+    const pairs = cookieHeader.split(';');
+    for (const pair of pairs) {
+      const [key, ...rest] = pair.split('=');
+      if (!key || rest.length === 0) continue;
+      const normalizedKey = key.trim().toLowerCase();
+      if (
+        normalizedKey === 'token' ||
+        normalizedKey === 'access_token' ||
+        normalizedKey === 'auth_token'
+      ) {
+        const value = rest.join('=');
+        return this.normalizeToken(value);
+      }
+    }
+    return null;
+  }
+
+  private isSafeMethod(method: string | undefined): boolean {
+    if (!method) return false;
+    const upper = method.toUpperCase();
+    return upper === 'GET' || upper === 'HEAD' || upper === 'OPTIONS';
+  }
 }

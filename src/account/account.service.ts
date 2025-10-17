@@ -77,17 +77,15 @@ export class AccountService {
     const language = currentDetails?.language ?? 'en-US';
     const genre = currentDetails?.genre ?? null;
 
-    const { error } = await this.supabase
-      .from('profile_details')
-      .upsert(
-        {
-          profileId,
-          phone: entry.phone,
-          language,
-          genre,
-        },
-        { onConflict: 'profileId' },
-      );
+    const { error } = await this.supabase.from('profile_details').upsert(
+      {
+        profileId,
+        phone: entry.phone,
+        language,
+        genre,
+      },
+      { onConflict: 'profileId' },
+    );
 
     if (error) {
       throw new InternalServerErrorException(
@@ -107,17 +105,15 @@ export class AccountService {
     const phone = currentDetails?.phone ?? null;
     const genre = currentDetails?.genre ?? null;
 
-    const { error } = await this.supabase
-      .from('profile_details')
-      .upsert(
-        {
-          profileId,
-          phone,
-          language: normalized,
-          genre,
-        },
-        { onConflict: 'profileId' },
-      );
+    const { error } = await this.supabase.from('profile_details').upsert(
+      {
+        profileId,
+        phone,
+        language: normalized,
+        genre,
+      },
+      { onConflict: 'profileId' },
+    );
 
     if (error) {
       throw new InternalServerErrorException(

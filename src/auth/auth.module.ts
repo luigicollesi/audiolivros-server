@@ -29,6 +29,11 @@ import { UsersModule } from '../users/users.module';
     DuplicateRequestDetectorService,
     DuplicateRequestStatsService,
   ],
-  exports: [ProfileDetailsService, EmailVerificationService, DuplicateRequestDetectorService, DuplicateRequestStatsService],
+  exports: [
+    ProfileDetailsService,
+    EmailVerificationService,
+    DuplicateRequestDetectorService,
+    DuplicateRequestStatsService,
+  ],
 })
 export class AuthModule {}

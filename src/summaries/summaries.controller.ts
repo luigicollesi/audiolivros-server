@@ -13,6 +13,7 @@ import type { Request } from 'express';
 import { SummariesService } from './summaries.service';
 import { GetSummaryDto } from './dto/get-summary.dto';
 import { FavoritesService } from '../favorites/favorites.service';
+import { ListeningProgressService } from '../audio/listening-progress.service';
 
 interface SessionizedRequest extends Request {
   session?: {
@@ -25,6 +26,7 @@ export class SummariesController {
   constructor(
     private readonly summaries: SummariesService,
     private readonly favorites: FavoritesService,
+    private readonly listeningProgress: ListeningProgressService,
   ) {}
 
   private readonly logger = new Logger(SummariesController.name);
@@ -57,7 +59,9 @@ export class SummariesController {
     }
 
     const summary = items[0];
-    const favorite = await this.favorites.isFavorite(
+    const favorite = await this.favorites.isFavorite(profileId, summary.bookId);
+
+    const listeningProgress = await this.listeningProgress.getListeningProgress(
       profileId,
       summary.bookId,
     );
@@ -66,6 +70,8 @@ export class SummariesController {
       audio_url: summary.audio_url,
       summary: summary.summary,
       favorite,
+      bookId: summary.bookId,
+      listeningProgress,
     };
 
     this.logger.debug(

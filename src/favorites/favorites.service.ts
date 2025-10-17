@@ -70,9 +70,7 @@ export class FavoritesService {
       throw new InternalServerErrorException(insertErr.message);
     }
 
-    this.logger.log(
-      `Livro ${bookId} favoritado pelo perfil ${profileId}.`,
-    );
+    this.logger.log(`Livro ${bookId} favoritado pelo perfil ${profileId}.`);
 
     return { success: true };
   }
@@ -219,7 +217,8 @@ export class FavoritesService {
     }
 
     if (languageId) {
-      const { data: fallback, error: fallbackErr } = await queryBase.maybeSingle();
+      const { data: fallback, error: fallbackErr } =
+        await queryBase.maybeSingle();
       if (fallbackErr && fallbackErr.code !== 'PGRST116') {
         throw new InternalServerErrorException(fallbackErr.message);
       }
@@ -237,8 +236,8 @@ export class FavoritesService {
     const authorsArr = Array.isArray(book.authors)
       ? book.authors
       : book.authors
-      ? [book.authors]
-      : [];
+        ? [book.authors]
+        : [];
     const author = authorsArr
       .map((entry) => entry?.author)
       .filter((value): value is string => Boolean(value && value.trim()))

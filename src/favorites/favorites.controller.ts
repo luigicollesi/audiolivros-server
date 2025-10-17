@@ -63,12 +63,7 @@ export class FavoritesController {
       throw new UnauthorizedException('Sessão inválida.');
     }
 
-    return this.favorites.getFavorites(
-      profileId,
-      q.languageId,
-      q.start,
-      q.end,
-    );
+    return this.favorites.getFavorites(profileId, q.languageId, q.start, q.end);
   }
 
   @Delete()

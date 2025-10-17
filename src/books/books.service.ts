@@ -137,8 +137,8 @@ export class BooksService {
         const authorsArray = Array.isArray(book.authors)
           ? book.authors
           : book.authors
-          ? [book.authors]
-          : [];
+            ? [book.authors]
+            : [];
         const authorMatches = authorsArray.some((entry) =>
           (entry?.author ?? '').toLowerCase().includes(lowerQuery),
         );
@@ -182,8 +182,8 @@ export class BooksService {
     const authorsArr = Array.isArray(book.authors)
       ? book.authors
       : book.authors
-      ? [book.authors]
-      : [];
+        ? [book.authors]
+        : [];
     const author = authorsArr
       .map((entry) => entry?.author)
       .filter((value): value is string => Boolean(value && value.trim()))

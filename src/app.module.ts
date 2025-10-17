@@ -15,48 +15,18 @@ import { BooksModule } from './books/books.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { AccountModule } from './account/account.module';
 import { SummariesModule } from './summaries/summaries.module';
+import { AudioModule } from './audio/audio.module';
 import { HealthController } from './health.controller';
 import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    // /covers
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public', 'covers'),
-      serveRoot: '/covers',
-      serveStaticOptions: {
-        maxAge: '30d',
-        etag: true,
-        immutable: true,
-      },
-    }),
-
-    // /audios (com Range por padrão)
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public', 'audios'),
-      serveRoot: '/audios',
-      serveStaticOptions: {
-        index: false,
-        maxAge: '365d',
-        etag: true,
-        immutable: true,
-        setHeaders: (res, filePath) => {
-          res.setHeader('Accept-Ranges', 'bytes');
-          if (filePath.endsWith('.mp3'))
-            res.setHeader('Content-Type', 'audio/mpeg');
-          else if (filePath.endsWith('.ogg'))
-            res.setHeader('Content-Type', 'audio/ogg');
-          else if (filePath.endsWith('.aac'))
-            res.setHeader('Content-Type', 'audio/aac');
-        },
-      },
-    }),
-
     SupabaseModule,
     BooksModule,
     FavoritesModule,
     AccountModule,
     SummariesModule,
+    AudioModule,
     AuthModule,
   ],
   controllers: [HealthController], // <— adiciona o endpoint /healthz
@@ -74,11 +44,6 @@ export class AppModule implements NestModule {
         { path: 'health', method: RequestMethod.GET },
         { path: 'docs', method: RequestMethod.GET },
         { path: 'version', method: RequestMethod.GET },
-        // assets públicos
-        { path: 'covers', method: RequestMethod.ALL },
-        { path: 'covers/(.*)', method: RequestMethod.ALL },
-        { path: 'audios', method: RequestMethod.ALL },
-        { path: 'audios/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*'); // Protege todo o resto
   }
