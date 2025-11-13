@@ -58,11 +58,12 @@ export class ListeningProgressService {
   private readonly passiveSessions = new Map<PassiveSessionKey, PassiveSession>();
 
   // Persistência
-  private readonly MIN_PROGRESS_PERCENT = 2;
-  private readonly MAX_PROGRESS_PERCENT = 99;
+  private readonly MIN_PROGRESS_PERCENT = 5;
+  private readonly MAX_PROGRESS_PERCENT = 95;
   private readonly MIN_VALID_POSITION_SECONDS = 5;
   private readonly AUTO_SAVE_POSITION_DELTA = 15;
   private readonly AUTO_SAVE_INTERVAL_MS = 60000;
+  private readonly MAX_LISTENING_PROGRESS_ROWS_PER_USER = 7;
 
   // Outros
   private readonly SESSION_TIMEOUT_MS = 5 * 60 * 1000;
@@ -527,6 +528,7 @@ export class ListeningProgressService {
 
     if ((updatedRows?.length ?? 0) > 0) {
       await this.enforceSingleRow(profileId, bookId);
+      await this.enforceProgressQuota(profileId);
       return true;
     }
 
@@ -560,6 +562,7 @@ export class ListeningProgressService {
         }
 
         await this.enforceSingleRow(profileId, bookId);
+        await this.enforceProgressQuota(profileId);
         return true;
       }
 
@@ -568,6 +571,7 @@ export class ListeningProgressService {
     }
 
     await this.enforceSingleRow(profileId, bookId);
+    await this.enforceProgressQuota(profileId);
     return true;
   }
 
@@ -611,6 +615,58 @@ export class ListeningProgressService {
     } else {
       this.logger.warn(
         `Removidas ${idsToDelete.length} duplicatas de progresso para user=${profileId}, book=${bookId}.`,
+      );
+    }
+  }
+
+  private async enforceProgressQuota(profileId: string): Promise<void> {
+    try {
+      const { data, error } = await this.supabase
+        .from('listening_progress')
+        .select('id')
+        .eq('profileId', profileId)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        this.logger.error(
+          `Erro ao aplicar limite de progresso (user=${profileId}): ${error.message}`,
+        );
+        return;
+      }
+
+      if (!Array.isArray(data) || data.length <= this.MAX_LISTENING_PROGRESS_ROWS_PER_USER) {
+        return;
+      }
+
+      const idsToDelete = data
+        .slice(this.MAX_LISTENING_PROGRESS_ROWS_PER_USER)
+        .map((row: any) => row?.id)
+        .filter(
+          (id): id is string | number =>
+            typeof id === 'string' || typeof id === 'number',
+        );
+
+      if (idsToDelete.length === 0) {
+        return;
+      }
+
+      const { error: deleteError } = await this.supabase
+        .from('listening_progress')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) {
+        this.logger.error(
+          `Erro ao remover excedentes de progresso (user=${profileId}): ${deleteError.message}`,
+        );
+      } else {
+        this.logger.warn(
+          `Removidos ${idsToDelete.length} registros antigos de progresso (user=${profileId}).`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Erro inesperado ao aplicar limite de progresso (user=${profileId}): ${err}`,
       );
     }
   }
