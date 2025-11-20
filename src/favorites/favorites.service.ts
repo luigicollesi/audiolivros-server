@@ -26,6 +26,7 @@ export type FavoriteBookItem = {
   author: string;
   year: number;
   cover_url: string;
+  listeningProgressPercent: number | null;
 };
 
 @Injectable()
@@ -121,8 +122,18 @@ export class FavoritesService {
       byId.set(row.id, this.toBookItem(row));
     }
 
+    const progressMap = await this.fetchUserProgress(profileId, bookIds);
     const orderedItems = bookIds
-      .map((id) => byId.get(String(id)))
+      .map((id) => {
+        const base = byId.get(String(id));
+        if (!base) return null;
+        const progress = progressMap.get(String(id));
+        return {
+          ...base,
+          listeningProgressPercent:
+            typeof progress === 'number' ? progress : null,
+        };
+      })
       .filter((item): item is FavoriteBookItem => Boolean(item));
 
     this.logger.debug(
@@ -249,10 +260,63 @@ export class FavoritesService {
       author,
       year: book.year,
       cover_url: book.cover_url,
+      listeningProgressPercent: null,
     };
   }
 
   private escapeForIlike(term: string) {
     return term.replace(/[%_\\]/g, '\\$&');
+  }
+
+  private async fetchUserProgress(
+    profileId: string,
+    bookIds: Array<string | number>,
+  ): Promise<Map<string, number | null>> {
+    const progressMap = new Map<string, number | null>();
+    if (!profileId || !bookIds.length) {
+      return progressMap;
+    }
+
+    const normalizedIds = Array.from(
+      new Set(
+        bookIds
+          .map((id) => (typeof id === 'string' ? id : String(id)))
+          .filter((id) => Boolean(id)),
+      ),
+    );
+
+    if (normalizedIds.length === 0) {
+      return progressMap;
+    }
+
+    const { data, error } = await this.supabase
+      .from('listening_progress')
+      .select('book_id, progress_percent')
+      .eq('profileId', profileId)
+      .in('book_id', normalizedIds);
+
+    if (error) {
+      this.logger.warn(
+        `Falha ao carregar listening_progress para favoritos do perfil ${profileId}: ${error.message}`,
+      );
+      return progressMap;
+    }
+
+    for (const row of data ?? []) {
+      const bookId =
+        typeof row?.book_id === 'string'
+          ? row.book_id
+          : row?.book_id != null
+            ? String(row.book_id)
+            : null;
+      if (!bookId) continue;
+      const percent =
+        typeof row?.progress_percent === 'number'
+          ? row.progress_percent
+          : null;
+      progressMap.set(bookId, percent);
+    }
+
+    return progressMap;
   }
 }

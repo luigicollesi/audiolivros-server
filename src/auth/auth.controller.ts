@@ -20,6 +20,7 @@ import { EmailRegisterDto } from './dto/email-register.dto';
 import { EmailResetRequestDto } from './dto/email-reset-request.dto';
 import { EmailResetVerifyDto } from './dto/email-reset-code.dto';
 import { EmailResetPasswordDto } from './dto/email-reset-password.dto';
+import { AcceptTermsDto } from './dto/accept-terms.dto';
 import { UsersService } from '../users/users.service';
 import { extractBearerToken } from '../common/utils/bearer';
 import { DuplicateRequestStatsService } from './duplicate-request-stats.service';
@@ -194,6 +195,20 @@ export class AuthController {
           ? e.status
           : HttpStatus.BAD_REQUEST;
       const message = e?.message ?? 'Falha ao renovar sessão.';
+      throw new HttpException({ message }, status);
+    }
+  }
+
+  @Post('terms/accept')
+  async acceptTerms(@Body() body: AcceptTermsDto) {
+    try {
+      return await this.auth.acceptTerms(body.pendingToken);
+    } catch (e: any) {
+      const status =
+        e?.status && Number.isInteger(e.status)
+          ? e.status
+          : HttpStatus.BAD_REQUEST;
+      const message = e?.message ?? 'Falha ao aceitar termos.';
       throw new HttpException({ message }, status);
     }
   }

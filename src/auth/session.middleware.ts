@@ -14,6 +14,7 @@ type SessionPayload = {
   provider: string;
   providerSub?: string;
   expiresAt: string;
+  permission: boolean;
 };
 
 interface SessionizedRequest extends Request {
@@ -33,6 +34,7 @@ export class SessionMiddleware implements NestMiddleware {
   async use(req: SessionizedRequest, res: Response, next: NextFunction) {
     try {
       const { token: tokenClear, source } = this.extractTokenFromRequest(req);
+      const isAuthFlowRoute = this.isAuthFlowRoute(req);
       if (!tokenClear) {
         this.logger.warn('Token ausente (header/query/cookie).');
         return res.status(401).json({ message: 'Token ausente.' });
@@ -44,7 +46,8 @@ export class SessionMiddleware implements NestMiddleware {
 
       const tokenHash = hashToken(tokenClear);
 
-      const shouldEnforceDuplicateGuard = !this.isSafeMethod(req.method);
+      const shouldEnforceDuplicateGuard =
+        !this.isSafeMethod(req.method) && !isAuthFlowRoute;
       let cleanup: () => void = () => {};
 
       if (shouldEnforceDuplicateGuard) {
@@ -103,7 +106,7 @@ export class SessionMiddleware implements NestMiddleware {
 
       const { data, error } = await this.sb
         .from('tokens')
-        .select('id,user_id,provider,provider_sub,expires_at')
+        .select('id,user_id,provider,provider_sub,expires_at,permission')
         .eq('token_hash', tokenHash)
         .maybeSingle();
 
@@ -119,12 +122,22 @@ export class SessionMiddleware implements NestMiddleware {
         ? String(data.provider_sub)
         : undefined;
 
+      const permission = Boolean((data as any)?.permission);
+
+      if (!permission && !isAuthFlowRoute) {
+        this.logger.warn(
+          `Token ${data.id} sem permissão tentou acessar rota ${req.method} ${req.originalUrl}`,
+        );
+        return handleError('Permissão insuficiente.', 403);
+      }
+
       req.session = {
         userId: String(data.user_id),
         tokenId: String(data.id),
         provider,
         providerSub,
         expiresAt: String(data.expires_at),
+        permission,
       };
 
       this.logger.debug(
@@ -216,5 +229,17 @@ export class SessionMiddleware implements NestMiddleware {
     if (!method) return false;
     const upper = method.toUpperCase();
     return upper === 'GET' || upper === 'HEAD' || upper === 'OPTIONS';
+  }
+
+  private isAuthFlowRoute(req: Request): boolean {
+    const path =
+      (req.baseUrl ? `${req.baseUrl}${req.path}` : req.path) || req.originalUrl;
+    if (!path) return false;
+    const normalized = path.toLowerCase();
+    return (
+      normalized.startsWith('/auth/email') ||
+      normalized.startsWith('/auth/phone') ||
+      normalized.startsWith('/auth/terms')
+    );
   }
 }

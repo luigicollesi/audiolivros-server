@@ -20,6 +20,10 @@ import { FinishedBooksService } from './finished-books.service';
     ListeningProgressService,
     FinishedBooksService,
   ],
-  exports: [AssetAccessLoggerService, ListeningProgressService, FinishedBooksService],
+  exports: [
+    AssetAccessLoggerService,
+    ListeningProgressService,
+    FinishedBooksService,
+  ],
 })
 export class AudioModule {}

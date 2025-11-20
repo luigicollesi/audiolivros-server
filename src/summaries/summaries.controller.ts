@@ -66,16 +66,19 @@ export class SummariesController {
       summary.bookId,
     );
 
+    const genres = await this.summaries.getGenresForBook(summary.bookId);
+
     const response = {
       audio_url: summary.audio_url,
       summary: summary.summary,
       favorite,
       bookId: summary.bookId,
       listeningProgress,
+      genres,
     };
 
     this.logger.debug(
-      `Resumo recuperado para "${q.title}" (${q.language}) - favorito=${favorite}.`,
+      `Resumo recuperado para "${q.title}" (${q.language}) - favorito=${favorite} - gêneros=${genres.length}.`,
     );
 
     return response;

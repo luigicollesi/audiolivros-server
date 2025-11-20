@@ -67,19 +67,24 @@ export class PhoneVerificationService {
     provider: string,
     providerSub: string,
   ): Promise<PendingVerification> {
+    const normalizedId = String(profileId);
+    if (!normalizedId) {
+      throw new BadRequestException('Perfil inválido para verificação.');
+    }
+
     const { clear: token, hash: tokenHash } = generateOpaqueToken(32);
     const tokenExpiresAt = await utcTimestampPlusMinutes(
       PHONE_PENDING_TTL_MINUTES,
     );
 
-    const existingToken = this.profileIndex.get(profileId);
+    const existingToken = this.profileIndex.get(normalizedId);
     if (existingToken) {
       this.clearRecord(existingToken);
     }
 
     const record: PendingRecord = {
       tokenHash,
-      profileId,
+      profileId: normalizedId,
       provider,
       providerSub,
       tokenExpiresAt,
@@ -102,7 +107,7 @@ export class PhoneVerificationService {
     }
 
     this.pendingByToken.set(tokenHash, record);
-    this.profileIndex.set(profileId, tokenHash);
+    this.profileIndex.set(normalizedId, tokenHash);
 
     return { token, expiresAt: tokenExpiresAt };
   }

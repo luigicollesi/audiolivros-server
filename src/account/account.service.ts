@@ -76,6 +76,7 @@ export class AccountService {
     const currentDetails = await this.profileDetails.getDetails(profileId);
     const language = currentDetails?.language ?? 'en-US';
     const genre = currentDetails?.genre ?? null;
+    const acceptedTerms = currentDetails?.acceptedTerms ?? false;
 
     const { error } = await this.supabase.from('profile_details').upsert(
       {
@@ -83,6 +84,7 @@ export class AccountService {
         phone: entry.phone,
         language,
         genre,
+        AcceptedTerms: acceptedTerms,
       },
       { onConflict: 'profileId' },
     );
@@ -104,6 +106,7 @@ export class AccountService {
     const currentDetails = await this.profileDetails.getDetails(profileId);
     const phone = currentDetails?.phone ?? null;
     const genre = currentDetails?.genre ?? null;
+    const acceptedTerms = currentDetails?.acceptedTerms ?? false;
 
     const { error } = await this.supabase.from('profile_details').upsert(
       {
@@ -111,6 +114,7 @@ export class AccountService {
         phone,
         language: normalized,
         genre,
+        AcceptedTerms: acceptedTerms,
       },
       { onConflict: 'profileId' },
     );

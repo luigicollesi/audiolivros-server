@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/module';
@@ -24,10 +25,13 @@ type BookItem = {
   author: string;
   year: number;
   cover_url: string;
+  listeningProgressPercent?: number | null;
 };
 
 @Injectable()
 export class BooksService {
+  private readonly logger = new Logger(BooksService.name);
+
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
   ) {}
@@ -35,7 +39,12 @@ export class BooksService {
   private readonly SEARCH_FETCH_BUFFER = 50;
   private readonly MIN_SEARCH_LENGTH = 3;
 
-  async getRange(start: number, end: number, languageId: string) {
+  async getRange(
+    start: number,
+    end: number,
+    languageId: string,
+    profileId?: string | null,
+  ) {
     const { data, count, error } = await this.supabase
       .from('books')
       .select(
@@ -57,7 +66,10 @@ export class BooksService {
     // Cast seguro via unknown (mantém tipagem depois)
     const rows = (data ?? []) as unknown as BookRow[];
 
-    const items: BookItem[] = rows.map((book) => this.toBookItem(book));
+    const progressMap = await this.fetchUserProgress(profileId, rows);
+    const items: BookItem[] = rows.map((book) =>
+      this.toBookItem(book, progressMap.get(String(book.id)) ?? null),
+    );
 
     return { total: count ?? 0, items };
   }
@@ -67,6 +79,7 @@ export class BooksService {
     start: number,
     end: number,
     languageId: string,
+    profileId?: string | null,
   ) {
     const query = String(text ?? '').trim();
     if (!query || query.length < this.MIN_SEARCH_LENGTH) {
@@ -157,9 +170,11 @@ export class BooksService {
     pushRows(titleRows, 0);
     pushRows(authorRows, 1);
 
-    const combined = Array.from(ranked.values()).sort(
-      (a, b) => a.weight - b.weight || a.order - b.order,
-    );
+    const combinedEntries = Array.from(ranked.entries()).sort((a, b) => {
+      const aMeta = a[1];
+      const bMeta = b[1];
+      return aMeta.weight - bMeta.weight || aMeta.order - bMeta.order;
+    });
 
     const totalUniqueEstimated = await this.estimateSearchTotal(
       languageId,
@@ -168,17 +183,27 @@ export class BooksService {
       authorResp.count ?? authorRows.length,
     );
 
-    const total = totalUniqueEstimated ?? combined.length;
-    const sliceStart = Math.min(start, combined.length);
-    const sliceEnd = Math.min(end + 1, combined.length);
-    const items = combined
+    const total = totalUniqueEstimated ?? combinedEntries.length;
+    const sliceStart = Math.min(start, combinedEntries.length);
+    const sliceEnd = Math.min(end + 1, combinedEntries.length);
+
+    const rankedIds = combinedEntries.map(([bookId]) => bookId);
+    const progressMap = await this.fetchUserProgress(profileId, rankedIds);
+
+    const items = combinedEntries
       .slice(sliceStart, sliceEnd)
-      .map((entry) => entry.item);
+      .map(([bookId, entry]) => ({
+        ...entry.item,
+        listeningProgressPercent: progressMap.get(bookId) ?? null,
+      }));
 
     return { total, items };
   }
 
-  private toBookItem(book: BookRow): BookItem {
+  private toBookItem(
+    book: BookRow,
+    progressPercent?: number | null,
+  ): BookItem {
     const authorsArr = Array.isArray(book.authors)
       ? book.authors
       : book.authors
@@ -195,7 +220,64 @@ export class BooksService {
       author,
       year: book.year,
       cover_url: book.cover_url,
+      listeningProgressPercent:
+        typeof progressPercent === 'number' ? progressPercent : null,
     };
+  }
+
+  private async fetchUserProgress(
+    profileId?: string | null,
+    rowsOrIds?: Array<BookRow | string | number>,
+  ): Promise<Map<string, number | null>> {
+    const progressMap = new Map<string, number | null>();
+    if (!profileId || !rowsOrIds || rowsOrIds.length === 0) {
+      return progressMap;
+    }
+
+    const collectIds = rowsOrIds.map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (typeof entry === 'number') return String(entry);
+      if (!entry?.id) return null;
+      return String(entry.id);
+    });
+
+    const uniqueIds = Array.from(
+      new Set(collectIds.filter((id): id is string => Boolean(id))),
+    );
+
+    if (uniqueIds.length === 0) {
+      return progressMap;
+    }
+
+    const { data, error } = await this.supabase
+      .from('listening_progress')
+      .select('book_id, progress_percent')
+      .eq('profileId', profileId)
+      .in('book_id', uniqueIds);
+
+    if (error) {
+      this.logger.warn(
+        `Falha ao carregar listening_progress para profile ${profileId}: ${error.message}`,
+      );
+      return progressMap;
+    }
+
+    for (const row of data ?? []) {
+      const bookId =
+        typeof row?.book_id === 'string'
+          ? row.book_id
+          : row?.book_id != null
+            ? String(row.book_id)
+            : null;
+      if (!bookId) continue;
+      const percent =
+        typeof row?.progress_percent === 'number'
+          ? row.progress_percent
+          : null;
+      progressMap.set(bookId, percent);
+    }
+
+    return progressMap;
   }
 
   private escapeForIlike(term: string) {

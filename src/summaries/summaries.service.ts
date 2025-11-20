@@ -14,6 +14,12 @@ export type SummaryItem = {
   summary: string;
 };
 type BookTitleRow = { book_id: string };
+type GenreRow = {
+  genres?:
+    | { genre?: string | null }
+    | Array<{ genre?: string | null }>
+    | null;
+};
 
 @Injectable()
 export class SummariesService {
@@ -60,5 +66,35 @@ export class SummariesService {
     // opcional dedupe
     const uniq = new Map(items.map((s) => [s.bookId, s]));
     return Array.from(uniq.values());
+  }
+
+  async getGenresForBook(bookId: string): Promise<string[]> {
+    if (!bookId) {
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('book_genres')
+      .select('genres:genres!inner(genre)')
+      .eq('book_id', bookId);
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Falha ao buscar gêneros do livro ${bookId}: ${error.message}`,
+      );
+    }
+
+    const rows = (data ?? []) as GenreRow[];
+    const genres = rows.flatMap((row) => {
+      if (Array.isArray(row.genres)) {
+        return row.genres;
+      }
+      return row.genres ? [row.genres] : [];
+    });
+
+    return genres
+      .map((entry) => entry?.genre)
+      .filter((genre): genre is string => Boolean(genre && genre.trim()))
+      .map((genre) => genre.trim());
   }
 }

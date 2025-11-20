@@ -9,6 +9,7 @@ import { EmailVerificationService } from './email-verification.service';
 import { PasswordsService } from './passwords.service';
 import { DuplicateRequestDetectorService } from './duplicate-request-detector.service';
 import { DuplicateRequestStatsService } from './duplicate-request-stats.service';
+import { TermsAcceptanceService } from './terms-acceptance.service';
 import { UsersModule } from '../users/users.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { UsersModule } from '../users/users.module';
     PasswordsService,
     DuplicateRequestDetectorService,
     DuplicateRequestStatsService,
+    TermsAcceptanceService,
   ],
   exports: [
     ProfileDetailsService,

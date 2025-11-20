@@ -16,6 +16,7 @@ import { FavoritesModule } from './favorites/favorites.module';
 import { AccountModule } from './account/account.module';
 import { SummariesModule } from './summaries/summaries.module';
 import { AudioModule } from './audio/audio.module';
+import { InsightsModule } from './insights/insights.module';
 import { HealthController } from './health.controller';
 import { AuthModule } from './auth/auth.module';
 
@@ -28,6 +29,7 @@ import { AuthModule } from './auth/auth.module';
     SummariesModule,
     AudioModule,
     AuthModule,
+    InsightsModule,
   ],
   controllers: [HealthController], // <— adiciona o endpoint /healthz
 })
@@ -39,7 +41,7 @@ export class AppModule implements NestModule {
         // Fluxos públicos de autenticação
         { path: 'auth/id-token', method: RequestMethod.POST },
         { path: 'auth/email/(.*)', method: RequestMethod.ALL },
-        { path: 'auth/phone/(.*)', method: RequestMethod.ALL },
+        { path: 'auth/email', method: RequestMethod.ALL },
         // health/docs públicos
         { path: 'health', method: RequestMethod.GET },
         { path: 'docs', method: RequestMethod.GET },

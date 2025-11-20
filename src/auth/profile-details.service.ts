@@ -11,6 +11,7 @@ export interface ProfileDetails {
   phone: string | null;
   language: string;
   genre: string | null;
+  acceptedTerms: boolean;
 }
 
 type ProfileDetailsRow = {
@@ -18,6 +19,7 @@ type ProfileDetailsRow = {
   phone?: string | null;
   language?: string | null;
   genre?: string | null;
+  AcceptedTerms?: boolean | null;
 };
 
 @Injectable()
@@ -56,7 +58,7 @@ export class ProfileDetailsService {
   async getDetails(profileId: string): Promise<ProfileDetails | null> {
     const { data, error } = await this.supabase
       .from('profile_details')
-      .select('phone, language, genre')
+      .select('phone, language, genre, AcceptedTerms')
       .eq('profileId', profileId)
       .maybeSingle();
 
@@ -79,6 +81,9 @@ export class ProfileDetailsService {
     if (!phone) throw new BadRequestException('Telefone obrigatório.');
 
     const language = this.normalizeLanguage(input.language);
+    const currentDetails = await this.getDetails(profileId);
+    const genre = currentDetails?.genre ?? null;
+    const acceptedTerms = currentDetails?.acceptedTerms ?? false;
 
     const { data, error } = await this.supabase
       .from('profile_details')
@@ -87,11 +92,12 @@ export class ProfileDetailsService {
           profileId,
           phone,
           language,
-          genre: null,
+          genre,
+          AcceptedTerms: acceptedTerms,
         },
         { onConflict: 'profileId' },
       )
-      .select('phone, language, genre')
+      .select('phone, language, genre, AcceptedTerms')
       .single();
 
     if (error)
@@ -110,6 +116,7 @@ export class ProfileDetailsService {
       phone: data.phone ?? null,
       language: this.normalizeLanguage(data.language),
       genre: data.genre ?? null,
+      acceptedTerms: Boolean(data.AcceptedTerms),
     };
   }
 
@@ -122,5 +129,39 @@ export class ProfileDetailsService {
         'Falha ao normalizar detalhes do perfil.',
       );
     return normalized;
+  }
+
+  async markTermsAccepted(
+    profileId: string,
+    preserved?: ProfileDetails | null,
+  ): Promise<ProfileDetails> {
+    const baseDetails = preserved ?? (await this.getDetails(profileId));
+    if (!baseDetails || !baseDetails.phone) {
+      throw new InternalServerErrorException(
+        'Não é possível aceitar termos sem telefone cadastrado.',
+      );
+    }
+
+    const { data, error } = await this.supabase
+      .from('profile_details')
+      .upsert(
+        {
+          profileId,
+          phone: this.normalizePhone(baseDetails.phone),
+          language: this.normalizeLanguage(baseDetails.language),
+          genre: baseDetails.genre ?? null,
+          AcceptedTerms: true,
+        },
+        { onConflict: 'profileId' },
+      )
+      .select('phone, language, genre, AcceptedTerms')
+      .single();
+
+    if (error)
+      throw new InternalServerErrorException(
+        `Falha ao aceitar termos: ${error.message}`,
+      );
+
+    return this.requireNormalizeDetails(data);
   }
 }

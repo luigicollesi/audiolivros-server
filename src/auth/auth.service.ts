@@ -23,8 +23,10 @@ import {
 import { PhoneVerificationService } from './phone-verification.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordsService } from './passwords.service';
+import { TermsAcceptanceService } from './terms-acceptance.service';
 
 const SESSION_TTL_MINUTES = 60;
+const AUTH_FLOW_TTL_MINUTES = 5;
 type ExternalProvider = 'google' | 'apple' | 'microsoft';
 const PROVIDER_NAME_FIELDS: Record<ExternalProvider, string[]> = {
   google: ['name', 'given_name'],
@@ -43,6 +45,7 @@ export class AuthService {
     private readonly phoneVerification: PhoneVerificationService,
     private readonly emailVerification: EmailVerificationService,
     private readonly passwords: PasswordsService,
+    private readonly termsAcceptance: TermsAcceptanceService,
   ) {}
 
   // === helpers ===
@@ -126,6 +129,13 @@ export class AuthService {
         String(profile.id),
         provider,
         providerSub,
+      );
+      await this.registerAuthFlowToken(
+        pending.token,
+        String(profile.id),
+        provider,
+        providerSub,
+        pending.expiresAt,
       );
       return {
         user: null,
@@ -214,6 +224,13 @@ export class AuthService {
       'local',
       String(profile.id),
     );
+    await this.registerAuthFlowToken(
+      pending.token,
+      String(profile.id),
+      'local',
+      String(profile.id),
+      pending.expiresAt,
+    );
     return {
       user: null,
       requiresPhone: true,
@@ -295,6 +312,13 @@ export class AuthService {
         String(profile.id),
         'local',
         String(profile.id),
+      );
+      await this.registerAuthFlowToken(
+        pending.token,
+        String(profile.id),
+        'local',
+        String(profile.id),
+        pending.expiresAt,
       );
       return {
         user: null,
@@ -390,6 +414,13 @@ export class AuthService {
         providerLabel,
         providerSub,
       );
+      await this.registerAuthFlowToken(
+        pending.token,
+        String(profile.id),
+        providerLabel,
+        providerSub,
+        pending.expiresAt,
+      );
       return {
         user: null,
         requiresPhone: true,
@@ -451,33 +482,43 @@ export class AuthService {
       throw new UnauthorizedException('Token expirado.');
     }
 
-    const { clear: newTokenClear, hash: newTokenHash } =
-      generateOpaqueToken(32);
-    const issuedAt = new Date().toISOString();
-    const expiresAt = await utcTimestampPlusMinutes(SESSION_TTL_MINUTES);
-
-    const { error: insertErr } = await this.supabase.from('tokens').insert({
-      user_id: current.user_id,
-      token_hash: newTokenHash,
-      provider: current.provider,
-      provider_sub: current.provider_sub,
-      issued_at: issuedAt,
-      expires_at: expiresAt,
-      revoked_at: null,
-    });
-    if (insertErr)
-      throw new InternalServerErrorException(
-        `Falha ao criar novo token: ${insertErr.message}`,
-      );
-
-    this.scheduleTokenDeletion(String(current.id), 60_000);
-
     const details = await this.profileDetails.getDetails(
       String(current.user_id),
     );
     if (!details || !details.phone) {
       throw new UnauthorizedException('Perfil incompleto.');
     }
+
+    const provider = String(current.provider ?? 'local');
+    const providerSub =
+      typeof current.provider_sub === 'string'
+        ? current.provider_sub
+        : current.provider_sub != null
+          ? String(current.provider_sub)
+          : '';
+
+    const pendingTerms = await this.maybeRequireTermsAcceptance(
+      String(current.user_id),
+      provider,
+      providerSub,
+      details,
+    );
+    if (pendingTerms) {
+      return pendingTerms;
+    }
+
+    const { clear: newTokenClear, hash: newTokenHash } =
+      generateOpaqueToken(32);
+    const expiresAt = await this.persistTokenRecord({
+      tokenHash: newTokenHash,
+      userId: String(current.user_id),
+      provider: current.provider,
+      providerSub: current.provider_sub,
+      permission: true,
+      consumeTokenHash: tokenHash,
+    });
+
+    this.scheduleTokenDeletion(String(current.id), 60_000);
 
     const profile = await this.loadProfileBasics(String(current.user_id));
 
@@ -510,6 +551,18 @@ export class AuthService {
     code: string;
   }) {
     const result = await this.phoneVerification.verifyCode(input);
+    await this.revokeToken(input.pendingToken);
+    return this.issueSession(
+      result.profileId,
+      result.provider,
+      result.providerSub,
+      result.details,
+    );
+  }
+
+  async acceptTerms(pendingToken: string) {
+    const result = await this.termsAcceptance.acceptTerms(pendingToken);
+    await this.revokeToken(pendingToken);
     return this.issueSession(
       result.profileId,
       result.provider,
@@ -530,25 +583,27 @@ export class AuthService {
       );
     }
 
+    const pendingTerms = await this.maybeRequireTermsAcceptance(
+      profileId,
+      provider,
+      providerSub,
+      details,
+    );
+    if (pendingTerms) {
+      return pendingTerms;
+    }
+
     const profile = await this.loadProfileBasics(profileId);
 
     const { clear: tokenClear, hash: tokenHash } = generateOpaqueToken(32);
-    const issuedAt = new Date().toISOString();
-    const expiresAt = await utcTimestampPlusMinutes(SESSION_TTL_MINUTES);
-
-    const { error } = await this.supabase.from('tokens').insert({
-      user_id: profileId,
-      token_hash: tokenHash,
+    const expiresAt = await this.persistTokenRecord({
+      tokenHash,
+      userId: profileId,
       provider,
-      provider_sub: providerSub,
-      issued_at: issuedAt,
-      expires_at: expiresAt,
-      revoked_at: null,
+      providerSub,
+      permission: true,
+      clearUserTokens: true,
     });
-    if (error)
-      throw new InternalServerErrorException(
-        `Falha ao criar token: ${error.message}`,
-      );
 
     return {
       sessionToken: tokenClear,
@@ -604,6 +659,133 @@ export class AuthService {
 
     if (typeof (timer as any)?.unref === 'function') {
       (timer as any).unref();
+    }
+  }
+
+  private async persistTokenRecord(input: {
+    tokenHash: string;
+    userId: string;
+    provider: string;
+    providerSub: string;
+    permission: boolean;
+    expiresAt?: string;
+    consumeTokenHash?: string | null;
+    clearUserTokens?: boolean;
+  }) {
+    const issuedAt = new Date().toISOString();
+    const expiresAt =
+      input.expiresAt ??
+      (await utcTimestampPlusMinutes(
+        input.permission ? SESSION_TTL_MINUTES : AUTH_FLOW_TTL_MINUTES,
+      ));
+
+    if (input.consumeTokenHash) {
+      await this.deleteTokenByHash(input.consumeTokenHash);
+    }
+
+    if (input.clearUserTokens) {
+      await this.deleteTokensByUser(input.userId);
+    }
+
+    const { error } = await this.supabase.from('tokens').insert({
+      user_id: input.userId,
+      token_hash: input.tokenHash,
+      provider: input.provider,
+      provider_sub:
+        input.providerSub !== undefined ? input.providerSub : null,
+      issued_at: issuedAt,
+      expires_at: expiresAt,
+      revoked_at: null,
+      permission: input.permission,
+    });
+    if (error)
+      throw new InternalServerErrorException(
+        `Falha ao criar token: ${error.message}`,
+      );
+
+    return expiresAt;
+  }
+
+  private async registerAuthFlowToken(
+    tokenClear: string,
+    userId: string,
+    provider: string,
+    providerSub: string,
+    expiresAt?: string,
+  ) {
+    if (!tokenClear) return;
+    const tokenHash = hashToken(tokenClear);
+    await this.persistTokenRecord({
+      tokenHash,
+      userId,
+      provider,
+      providerSub,
+      permission: false,
+      expiresAt,
+      clearUserTokens: true,
+    });
+  }
+
+  private async revokeToken(tokenClear?: string) {
+    if (!tokenClear) return;
+    const tokenHash = hashToken(tokenClear);
+    await this.supabase.from('tokens').delete().eq('token_hash', tokenHash);
+  }
+
+  private async maybeRequireTermsAcceptance(
+    profileId: string,
+    provider: string,
+    providerSub: string,
+    details: ProfileDetails,
+  ) {
+    if (details.acceptedTerms) {
+      return null;
+    }
+
+    const pending = await this.termsAcceptance.createPending(
+      profileId,
+      provider,
+      providerSub,
+      details,
+    );
+    await this.registerAuthFlowToken(
+      pending.token,
+      profileId,
+      provider,
+      providerSub,
+      pending.expiresAt,
+    );
+
+    return {
+      user: null,
+      requiresPhone: false,
+      requiresTermsAcceptance: true,
+      termsPendingToken: pending.token,
+      termsPendingTokenExpiresAt: pending.expiresAt,
+    };
+  }
+
+  private async deleteTokensByUser(userId: string) {
+    const { error } = await this.supabase
+      .from('tokens')
+      .delete()
+      .eq('user_id', userId);
+    if (error) {
+      this.logger.error(
+        `Falha ao remover tokens do usuário ${userId}: ${error.message}`,
+      );
+    }
+  }
+
+  private async deleteTokenByHash(tokenHash: string) {
+    const { error } = await this.supabase
+      .from('tokens')
+      .delete()
+      .eq('token_hash', tokenHash);
+    if (error) {
+      this.logger.error(
+        `Falha ao remover token ${tokenHash.slice(0, 8)}...: ${error.message}`,
+      );
     }
   }
 
