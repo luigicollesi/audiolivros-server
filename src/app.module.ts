@@ -19,6 +19,7 @@ import { AudioModule } from './audio/audio.module';
 import { InsightsModule } from './insights/insights.module';
 import { HealthController } from './health.controller';
 import { AuthModule } from './auth/auth.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AuthModule } from './auth/auth.module';
     AudioModule,
     AuthModule,
     InsightsModule,
+    ReviewsModule,
   ],
   controllers: [HealthController], // <— adiciona o endpoint /healthz
 })

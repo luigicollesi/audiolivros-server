@@ -443,10 +443,6 @@ export class ListeningProgressService {
     existing: ExistingProgressRow | null,
     force = false,
   ): { persist: boolean; reason?: string } {
-    if (force) {
-      return { persist: true };
-    }
-
     if (!payload.bookId) {
       return { persist: false, reason: 'bookId ausente' };
     }
@@ -467,6 +463,10 @@ export class ListeningProgressService {
         persist: false,
         reason: `percentual fora do intervalo (${payload.progressPercent?.toFixed(1)}%)`,
       };
+    }
+
+    if (force) {
+      return { persist: true };
     }
 
     if (!existing) {
